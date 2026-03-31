@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "judgment-cli"
+version = "0.1.0"
+description = "CLI for the Judgment API"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [{name = "Judgment Labs"}]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+]
+dependencies = [
+    "click>=8.0",
+    "httpx>=0.24",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx",
+]
+
+[project.scripts]
+judgment = "judgment_cli.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
