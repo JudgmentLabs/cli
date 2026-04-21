@@ -1,6 +1,6 @@
 .PHONY: generate install dev test clean
 
-SPEC_URL ?= https://api2.judgmentlabs.ai/openapi/json
+SPEC_URL ?= https://api3.judgmentlabs.ai/openapi/json
 
 # Re-generate CLI commands from the OpenAPI spec
 generate:

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import sys
 
 import click
 
@@ -12,6 +13,84 @@ def _output(data: object) -> None:
     """Pretty-print response data as JSON."""
     click.echo(json.dumps(data, indent=2, default=str))
 
+
+def _schema_type(schema: dict) -> str | None:
+    if "type" in schema:
+        return schema["type"]
+    for option in schema.get("anyOf", []):
+        if isinstance(option, dict) and option.get("type") != "null":
+            return option.get("type")
+    return None
+
+
+def _apply_request_defaults(body: object, schema: dict) -> None:
+    """Fill in schema-driven defaults for generated POST bodies."""
+    if not isinstance(body, dict) or not isinstance(schema, dict):
+        return
+
+    required = set(schema.get("required", []))
+    properties = schema.get("properties", {})
+
+    for name, prop_schema in properties.items():
+        if not isinstance(prop_schema, dict):
+            continue
+
+        prop_type = _schema_type(prop_schema)
+
+        if name not in body:
+            if name == "filters" and prop_type == "array":
+                body[name] = []
+            elif name in required and prop_type == "object":
+                body[name] = {}
+            else:
+                continue
+
+        value = body.get(name)
+
+        if prop_type == "object" and isinstance(value, dict):
+            child_required = set(prop_schema.get("required", []))
+            child_properties = prop_schema.get("properties", {})
+            for child_name, child_schema in child_properties.items():
+                if child_name in value or not isinstance(child_schema, dict):
+                    continue
+                if child_name not in child_required:
+                    continue
+                any_of = child_schema.get("anyOf", [])
+                if any(
+                    isinstance(option, dict) and option.get("type") == "null"
+                    for option in any_of
+                ):
+                    value[child_name] = None
+            _apply_request_defaults(value, prop_schema)
+        elif prop_type == "array" and isinstance(value, list):
+            item_schema = prop_schema.get("items")
+            if isinstance(item_schema, dict):
+                for item in value:
+                    _apply_request_defaults(item, item_schema)
+
+
+# ────────────────────────────────────────────────────────────────────
+# Group: automations
+# ────────────────────────────────────────────────────────────────────
+
+
+@click.group("automations")
+def automations_group() -> None:
+    """Manage automations."""
+    pass
+
+
+@automations_group.command("list")
+@click.argument("project_id")
+@click.pass_context
+def automations_list(ctx, project_id):
+    """List automations."""
+    url = "/automations/list"
+    body = {}
+    body["project_id"] = project_id
+    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id'], 'properties': {'project_id': {'type': 'string'}}})
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
 
 # ────────────────────────────────────────────────────────────────────
 # Group: behaviors
@@ -24,23 +103,6 @@ def behaviors_group() -> None:
     pass
 
 
-@behaviors_group.command("list")
-@click.argument("project_id")
-@click.option("--start-date", "start_date", default=None)
-@click.option("--end-date", "end_date", default=None)
-@click.pass_context
-def behaviors_list(ctx, project_id, start_date, end_date):
-    """List all behaviors in a project."""
-    url = f"/projects/{project_id}/behaviors/"
-    params = {}
-    if start_date is not None:
-        params["start_date"] = start_date
-    if end_date is not None:
-        params["end_date"] = end_date
-    result = ctx.obj["client"].request("GET", url, params=params)
-    _output(result)
-
-
 @behaviors_group.command("get")
 @click.argument("project_id")
 @click.argument("behavior_id")
@@ -48,34 +110,68 @@ def behaviors_list(ctx, project_id, start_date, end_date):
 @click.option("--end-date", "end_date", default=None)
 @click.pass_context
 def behaviors_get(ctx, project_id, behavior_id, start_date, end_date):
-    """Get behavior details."""
-    url = f"/projects/{project_id}/behaviors/{behavior_id}"
-    params = {}
+    """Get behavior detail."""
+    url = "/behaviors/detail"
+    body = {}
+    body["project_id"] = project_id
+    body["behavior_id"] = behavior_id
     if start_date is not None:
-        params["start_date"] = start_date
+        body["start_date"] = start_date
     if end_date is not None:
-        params["end_date"] = end_date
-    result = ctx.obj["client"].request("GET", url, params=params)
+        body["end_date"] = end_date
+    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'behavior_id'], 'properties': {'project_id': {'type': 'string'}, 'behavior_id': {'type': 'string'}, 'start_date': {'type': 'string'}, 'end_date': {'type': 'string'}}})
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@behaviors_group.command("list")
+@click.argument("project_id")
+@click.pass_context
+def behaviors_list(ctx, project_id):
+    """List behaviors."""
+    url = "/behaviors/list"
+    body = {}
+    body["project_id"] = project_id
+    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id'], 'properties': {'project_id': {'type': 'string'}}})
+    result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
 # ────────────────────────────────────────────────────────────────────
-# Group: datasets
+# Group: docs
 # ────────────────────────────────────────────────────────────────────
 
 
-@click.group("datasets")
-def datasets_group() -> None:
-    """Manage datasets."""
+@click.group("docs")
+def docs_group() -> None:
+    """Search and read docs."""
     pass
 
 
-@datasets_group.command("list")
-@click.argument("project_id")
+@docs_group.command("read")
+@click.argument("path")
 @click.pass_context
-def datasets_list(ctx, project_id):
-    """List all datasets in a project."""
-    url = f"/projects/{project_id}/datasets/"
-    result = ctx.obj["client"].request("GET", url)
+def docs_read(ctx, path):
+    """Read doc page."""
+    url = "/docs/page"
+    params = {}
+    params["path"] = path
+    result = ctx.obj["client"].request("GET", url, params=params)
+    _output(result)
+
+
+@docs_group.command("search")
+@click.argument("query")
+@click.option("--match-count", "match_count", default=None, type=float)
+@click.pass_context
+def docs_search(ctx, query, match_count):
+    """Search docs."""
+    url = "/docs/search"
+    body = {}
+    body["query"] = query
+    if match_count is not None:
+        body["match_count"] = match_count
+    _apply_request_defaults(body, {'type': 'object', 'required': ['query'], 'properties': {'query': {'type': 'string'}, 'match_count': {'minimum': 1, 'maximum': 20, 'type': 'number'}}})
+    result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
 # ────────────────────────────────────────────────────────────────────
@@ -89,73 +185,18 @@ def judges_group() -> None:
     pass
 
 
-@judges_group.command("list")
-@click.argument("project_id")
-@click.pass_context
-def judges_list(ctx, project_id):
-    """List all judges in a project."""
-    url = f"/projects/{project_id}/judges/"
-    result = ctx.obj["client"].request("GET", url)
-    _output(result)
-
-
-@judges_group.command("get")
+@judges_group.command("settings")
 @click.argument("project_id")
 @click.argument("judge_id")
 @click.pass_context
-def judges_get(ctx, project_id, judge_id):
-    """Get judge details and versions."""
-    url = f"/projects/{project_id}/judges/{judge_id}"
-    result = ctx.obj["client"].request("GET", url)
-    _output(result)
-
-
-@judges_group.command("models")
-@click.argument("project_id")
-@click.pass_context
-def judges_models(ctx, project_id):
-    """List available LLM models for judges."""
-    url = f"/projects/{project_id}/judges/models"
-    result = ctx.obj["client"].request("GET", url)
-    _output(result)
-
-# ────────────────────────────────────────────────────────────────────
-# Group: orgs
-# ────────────────────────────────────────────────────────────────────
-
-
-@click.group("orgs")
-def orgs_group() -> None:
-    """Manage organizations."""
-    pass
-
-
-@orgs_group.command("list")
-@click.pass_context
-def orgs_list(ctx):
-    """List organizations for the current user."""
-    url = "/organizations/"
-    result = ctx.obj["client"].request("GET", url)
-    _output(result)
-
-
-@orgs_group.command("get")
-@click.argument("organization_id")
-@click.pass_context
-def orgs_get(ctx, organization_id):
-    """Get organization details."""
-    url = f"/organizations/{organization_id}"
-    result = ctx.obj["client"].request("GET", url)
-    _output(result)
-
-
-@orgs_group.command("usage")
-@click.argument("organization_id")
-@click.pass_context
-def orgs_usage(ctx, organization_id):
-    """Get organization usage metrics."""
-    url = f"/organizations/{organization_id}/usage"
-    result = ctx.obj["client"].request("GET", url)
+def judges_settings(ctx, project_id, judge_id):
+    """Get judge settings."""
+    url = "/judges/settings"
+    body = {}
+    body["project_id"] = project_id
+    body["judge_id"] = judge_id
+    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'judge_id'], 'properties': {'project_id': {'type': 'string'}, 'judge_id': {'type': 'string'}}})
+    result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
 # ────────────────────────────────────────────────────────────────────
@@ -172,80 +213,8 @@ def projects_group() -> None:
 @projects_group.command("list")
 @click.pass_context
 def projects_list(ctx):
-    """List all projects in the organization."""
-    url = "/projects/"
-    result = ctx.obj["client"].request("GET", url)
-    _output(result)
-
-
-@projects_group.command("get")
-@click.argument("project_id")
-@click.pass_context
-def projects_get(ctx, project_id):
-    """Get a project by ID."""
-    url = f"/projects/{project_id}"
-    result = ctx.obj["client"].request("GET", url)
-    _output(result)
-
-# ────────────────────────────────────────────────────────────────────
-# Group: prompts
-# ────────────────────────────────────────────────────────────────────
-
-
-@click.group("prompts")
-def prompts_group() -> None:
-    """Manage prompt versions."""
-    pass
-
-
-@prompts_group.command("list")
-@click.argument("project_id")
-@click.pass_context
-def prompts_list(ctx, project_id):
-    """List all prompts in a project."""
-    url = f"/projects/{project_id}/prompts/"
-    result = ctx.obj["client"].request("GET", url)
-    _output(result)
-
-
-@prompts_group.command("get")
-@click.argument("project_id")
-@click.argument("prompt_name")
-@click.pass_context
-def prompts_get(ctx, project_id, prompt_name):
-    """Get the latest version of a prompt."""
-    url = f"/projects/{project_id}/prompts/{prompt_name}"
-    result = ctx.obj["client"].request("GET", url)
-    _output(result)
-
-
-@prompts_group.command("versions")
-@click.argument("project_id")
-@click.argument("prompt_name")
-@click.pass_context
-def prompts_versions(ctx, project_id, prompt_name):
-    """List all versions of a prompt."""
-    url = f"/projects/{project_id}/prompts/{prompt_name}/list"
-    result = ctx.obj["client"].request("GET", url)
-    _output(result)
-
-# ────────────────────────────────────────────────────────────────────
-# Group: rules
-# ────────────────────────────────────────────────────────────────────
-
-
-@click.group("rules")
-def rules_group() -> None:
-    """Manage automation rules."""
-    pass
-
-
-@rules_group.command("list")
-@click.argument("project_id")
-@click.pass_context
-def rules_list(ctx, project_id):
-    """List all rules in a project."""
-    url = f"/projects/{project_id}/rules/"
+    """List projects."""
+    url = "/projects"
     result = ctx.obj["client"].request("GET", url)
     _output(result)
 
@@ -265,29 +234,159 @@ def sessions_group() -> None:
 @click.argument("session_id")
 @click.pass_context
 def sessions_get(ctx, project_id, session_id):
-    """Get session details."""
-    url = f"/projects/{project_id}/sessions/{session_id}"
-    result = ctx.obj["client"].request("GET", url)
+    """Get session detail."""
+    url = "/sessions/detail"
+    body = {}
+    body["project_id"] = project_id
+    body["session_id"] = session_id
+    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'session_id'], 'properties': {'project_id': {'type': 'string'}, 'session_id': {'type': 'string'}}})
+    result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
-# ────────────────────────────────────────────────────────────────────
-# Group: tests
-# ────────────────────────────────────────────────────────────────────
 
-
-@click.group("tests")
-def tests_group() -> None:
-    """View test / experiment runs."""
-    pass
-
-
-@tests_group.command("list")
+@sessions_group.command("list")
 @click.argument("project_id")
+@click.option("--session-id", "session_id", default=None)
+@click.option("--behavior", "behavior", multiple=True)
+@click.option("--min-traces", "min_traces", default=None, type=float)
+@click.option("--max-traces", "max_traces", default=None, type=float)
+@click.option("--min-latency", "min_latency", default=None, type=float)
+@click.option("--max-latency", "max_latency", default=None, type=float)
+@click.option("--min-cost", "min_cost", default=None, type=float)
+@click.option("--max-cost", "max_cost", default=None, type=float)
+@click.option("--sort-field", "sort_field", default=None, type=click.Choice(['created_at', 'num_traces', 'latency', 'llm_cost']))
+@click.option("--sort-dir", "sort_dir", default=None, type=click.Choice(['asc', 'desc']))
+@click.option("--start-time", "start_time", default=None)
+@click.option("--end-time", "end_time", default=None)
+@click.option("--limit", "limit", default=None, type=float)
+@click.option("--cursor-sort-value", "cursor_sort_value", default=None)
+@click.option("--cursor-item-id", "cursor_item_id", default=None)
 @click.pass_context
-def tests_list(ctx, project_id):
-    """List test (experiment) runs."""
-    url = f"/projects/{project_id}/tests/"
-    result = ctx.obj["client"].request("GET", url)
+def sessions_list(ctx, project_id, session_id, behavior, min_traces, max_traces, min_latency, max_latency, min_cost, max_cost, sort_field, sort_dir, start_time, end_time, limit, cursor_sort_value, cursor_item_id):
+    """List sessions."""
+    url = "/sessions/list"
+    body = {}
+    body["project_id"] = project_id
+    if session_id is not None:
+        body["session_id"] = session_id
+    if behavior:
+        body["behavior"] = list(behavior)
+    if min_traces is not None:
+        body["min_traces"] = min_traces
+    if max_traces is not None:
+        body["max_traces"] = max_traces
+    if min_latency is not None:
+        body["min_latency"] = min_latency
+    if max_latency is not None:
+        body["max_latency"] = max_latency
+    if min_cost is not None:
+        body["min_cost"] = min_cost
+    if max_cost is not None:
+        body["max_cost"] = max_cost
+    if sort_field is not None:
+        body["sort_field"] = sort_field
+    if sort_dir is not None:
+        body["sort_dir"] = sort_dir
+    if start_time is not None:
+        body["start_time"] = start_time
+    if end_time is not None:
+        body["end_time"] = end_time
+    if limit is not None:
+        body["limit"] = limit
+    if cursor_sort_value is not None:
+        body["cursorSortValue"] = cursor_sort_value
+    if cursor_item_id is not None:
+        body["cursorItemId"] = cursor_item_id
+    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id'], 'properties': {'project_id': {'type': 'string'}, 'session_id': {'type': 'string'}, 'behavior': {'type': 'array', 'items': {'format': 'uuid', 'type': 'string'}}, 'min_traces': {'type': 'number'}, 'max_traces': {'type': 'number'}, 'min_latency': {'type': 'number'}, 'max_latency': {'type': 'number'}, 'min_cost': {'type': 'number'}, 'max_cost': {'type': 'number'}, 'sort_field': {'type': 'string', 'enum': ['created_at', 'num_traces', 'latency', 'llm_cost']}, 'sort_dir': {'type': 'string', 'enum': ['asc', 'desc']}, 'start_time': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'end_time': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'limit': {'minimum': 1, 'maximum': 200, 'type': 'number'}, 'cursorSortValue': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'cursorItemId': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}}})
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@sessions_group.command("search")
+@click.argument("project_id")
+@click.option("--session-id", "session_id", default=None)
+@click.option("--behavior", "behavior", multiple=True)
+@click.option("--min-traces", "min_traces", default=None, type=float)
+@click.option("--max-traces", "max_traces", default=None, type=float)
+@click.option("--min-latency", "min_latency", default=None, type=float)
+@click.option("--max-latency", "max_latency", default=None, type=float)
+@click.option("--min-cost", "min_cost", default=None, type=float)
+@click.option("--max-cost", "max_cost", default=None, type=float)
+@click.option("--sort-field", "sort_field", default=None, type=click.Choice(['created_at', 'num_traces', 'latency', 'llm_cost']))
+@click.option("--sort-dir", "sort_dir", default=None, type=click.Choice(['asc', 'desc']))
+@click.option("--start-time", "start_time", default=None)
+@click.option("--end-time", "end_time", default=None)
+@click.option("--limit", "limit", default=None, type=float)
+@click.option("--cursor-sort-value", "cursor_sort_value", default=None)
+@click.option("--cursor-item-id", "cursor_item_id", default=None)
+@click.pass_context
+def sessions_search(ctx, project_id, session_id, behavior, min_traces, max_traces, min_latency, max_latency, min_cost, max_cost, sort_field, sort_dir, start_time, end_time, limit, cursor_sort_value, cursor_item_id):
+    """Search sessions."""
+    url = "/sessions/search"
+    body = {}
+    body["project_id"] = project_id
+    if session_id is not None:
+        body["session_id"] = session_id
+    if behavior:
+        body["behavior"] = list(behavior)
+    if min_traces is not None:
+        body["min_traces"] = min_traces
+    if max_traces is not None:
+        body["max_traces"] = max_traces
+    if min_latency is not None:
+        body["min_latency"] = min_latency
+    if max_latency is not None:
+        body["max_latency"] = max_latency
+    if min_cost is not None:
+        body["min_cost"] = min_cost
+    if max_cost is not None:
+        body["max_cost"] = max_cost
+    if sort_field is not None:
+        body["sort_field"] = sort_field
+    if sort_dir is not None:
+        body["sort_dir"] = sort_dir
+    if start_time is not None:
+        body["start_time"] = start_time
+    if end_time is not None:
+        body["end_time"] = end_time
+    if limit is not None:
+        body["limit"] = limit
+    if cursor_sort_value is not None:
+        body["cursorSortValue"] = cursor_sort_value
+    if cursor_item_id is not None:
+        body["cursorItemId"] = cursor_item_id
+    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id'], 'properties': {'project_id': {'type': 'string'}, 'session_id': {'type': 'string'}, 'behavior': {'type': 'array', 'items': {'format': 'uuid', 'type': 'string'}}, 'min_traces': {'type': 'number'}, 'max_traces': {'type': 'number'}, 'min_latency': {'type': 'number'}, 'max_latency': {'type': 'number'}, 'min_cost': {'type': 'number'}, 'max_cost': {'type': 'number'}, 'sort_field': {'type': 'string', 'enum': ['created_at', 'num_traces', 'latency', 'llm_cost']}, 'sort_dir': {'type': 'string', 'enum': ['asc', 'desc']}, 'start_time': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'end_time': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'limit': {'minimum': 1, 'maximum': 200, 'type': 'number'}, 'cursorSortValue': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'cursorItemId': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}}})
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@sessions_group.command("trace-behaviors")
+@click.argument("project_id")
+@click.argument("session_id")
+@click.pass_context
+def sessions_trace_behaviors(ctx, project_id, session_id):
+    """Get session trace behaviors."""
+    url = "/sessions/trace-behaviors"
+    body = {}
+    body["project_id"] = project_id
+    body["session_id"] = session_id
+    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'session_id'], 'properties': {'project_id': {'type': 'string'}, 'session_id': {'type': 'string'}}})
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@sessions_group.command("trace-ids")
+@click.argument("project_id")
+@click.argument("session_id")
+@click.pass_context
+def sessions_trace_ids(ctx, project_id, session_id):
+    """Get session trace IDs."""
+    url = "/sessions/trace-ids"
+    body = {}
+    body["project_id"] = project_id
+    body["session_id"] = session_id
+    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'session_id'], 'properties': {'project_id': {'type': 'string'}, 'session_id': {'type': 'string'}}})
+    result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
 # ────────────────────────────────────────────────────────────────────
@@ -301,14 +400,194 @@ def traces_group() -> None:
     pass
 
 
+@traces_group.command("behaviors")
+@click.argument("project_id")
+@click.argument("trace_id")
+@click.pass_context
+def traces_behaviors(ctx, project_id, trace_id):
+    """Get trace behaviors."""
+    url = "/traces/behaviors"
+    body = {}
+    body["project_id"] = project_id
+    body["trace_id"] = trace_id
+    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'trace_id'], 'properties': {'project_id': {'type': 'string'}, 'trace_id': {'type': 'string'}}})
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
 @traces_group.command("get")
 @click.argument("project_id")
 @click.argument("trace_id")
 @click.pass_context
 def traces_get(ctx, project_id, trace_id):
-    """Get trace details."""
-    url = f"/projects/{project_id}/traces/{trace_id}"
-    result = ctx.obj["client"].request("GET", url)
+    """Get trace detail."""
+    url = "/traces/detail"
+    body = {}
+    body["project_id"] = project_id
+    body["trace_id"] = trace_id
+    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'trace_id'], 'properties': {'project_id': {'type': 'string'}, 'trace_id': {'type': 'string'}}})
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@traces_group.command("list")
+@click.argument("project_id")
+@click.option("--search", "search", default=None)
+@click.option("--span-name", "span_name", default=None)
+@click.option("--customer-id", "customer_id", default=None)
+@click.option("--session-id", "session_id", default=None)
+@click.option("--error", "error", default=None)
+@click.option("--tag", "tag", multiple=True)
+@click.option("--dataset-id", "dataset_id", default=None)
+@click.option("--min-duration", "min_duration", default=None, type=float)
+@click.option("--max-duration", "max_duration", default=None, type=float)
+@click.option("--min-cost", "min_cost", default=None, type=float)
+@click.option("--max-cost", "max_cost", default=None, type=float)
+@click.option("--sort-field", "sort_field", default=None, type=click.Choice(['created_at', 'span_name', 'duration', 'llm_cost']))
+@click.option("--sort-dir", "sort_dir", default=None, type=click.Choice(['asc', 'desc']))
+@click.option("--start-time", "start_time", default=None)
+@click.option("--end-time", "end_time", default=None)
+@click.option("--limit", "limit", default=None, type=float)
+@click.option("--cursor-created-at", "cursor_created_at", default=None)
+@click.option("--cursor-item-id", "cursor_item_id", default=None)
+@click.pass_context
+def traces_list(ctx, project_id, search, span_name, customer_id, session_id, error, tag, dataset_id, min_duration, max_duration, min_cost, max_cost, sort_field, sort_dir, start_time, end_time, limit, cursor_created_at, cursor_item_id):
+    """List traces."""
+    url = "/traces/list"
+    body = {}
+    body["project_id"] = project_id
+    if search is not None:
+        body["search"] = search
+    if span_name is not None:
+        body["span_name"] = span_name
+    if customer_id is not None:
+        body["customer_id"] = customer_id
+    if session_id is not None:
+        body["session_id"] = session_id
+    if error is not None:
+        body["error"] = error
+    if tag:
+        body["tag"] = list(tag)
+    if dataset_id is not None:
+        body["dataset_id"] = dataset_id
+    if min_duration is not None:
+        body["min_duration"] = min_duration
+    if max_duration is not None:
+        body["max_duration"] = max_duration
+    if min_cost is not None:
+        body["min_cost"] = min_cost
+    if max_cost is not None:
+        body["max_cost"] = max_cost
+    if sort_field is not None:
+        body["sort_field"] = sort_field
+    if sort_dir is not None:
+        body["sort_dir"] = sort_dir
+    if start_time is not None:
+        body["start_time"] = start_time
+    if end_time is not None:
+        body["end_time"] = end_time
+    if limit is not None:
+        body["limit"] = limit
+    if cursor_created_at is not None:
+        body["cursorCreatedAt"] = cursor_created_at
+    if cursor_item_id is not None:
+        body["cursorItemId"] = cursor_item_id
+    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id'], 'properties': {'project_id': {'type': 'string'}, 'search': {'type': 'string'}, 'span_name': {'type': 'string'}, 'customer_id': {'type': 'string'}, 'session_id': {'type': 'string'}, 'error': {'type': 'string'}, 'tag': {'type': 'array', 'items': {'type': 'string'}}, 'dataset_id': {'type': 'string'}, 'min_duration': {'type': 'number'}, 'max_duration': {'type': 'number'}, 'min_cost': {'type': 'number'}, 'max_cost': {'type': 'number'}, 'sort_field': {'type': 'string', 'enum': ['created_at', 'span_name', 'duration', 'llm_cost']}, 'sort_dir': {'type': 'string', 'enum': ['asc', 'desc']}, 'start_time': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'end_time': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'limit': {'minimum': 1, 'maximum': 200, 'type': 'number'}, 'cursorCreatedAt': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'cursorItemId': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}}})
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@traces_group.command("search")
+@click.argument("project_id")
+@click.option("--search", "search", default=None)
+@click.option("--span-name", "span_name", default=None)
+@click.option("--customer-id", "customer_id", default=None)
+@click.option("--session-id", "session_id", default=None)
+@click.option("--error", "error", default=None)
+@click.option("--tag", "tag", multiple=True)
+@click.option("--dataset-id", "dataset_id", default=None)
+@click.option("--min-duration", "min_duration", default=None, type=float)
+@click.option("--max-duration", "max_duration", default=None, type=float)
+@click.option("--min-cost", "min_cost", default=None, type=float)
+@click.option("--max-cost", "max_cost", default=None, type=float)
+@click.option("--sort-field", "sort_field", default=None, type=click.Choice(['created_at', 'span_name', 'duration', 'llm_cost']))
+@click.option("--sort-dir", "sort_dir", default=None, type=click.Choice(['asc', 'desc']))
+@click.option("--start-time", "start_time", default=None)
+@click.option("--end-time", "end_time", default=None)
+@click.option("--limit", "limit", default=None, type=float)
+@click.option("--cursor-created-at", "cursor_created_at", default=None)
+@click.option("--cursor-item-id", "cursor_item_id", default=None)
+@click.pass_context
+def traces_search(ctx, project_id, search, span_name, customer_id, session_id, error, tag, dataset_id, min_duration, max_duration, min_cost, max_cost, sort_field, sort_dir, start_time, end_time, limit, cursor_created_at, cursor_item_id):
+    """Search traces."""
+    url = "/traces/search"
+    body = {}
+    body["project_id"] = project_id
+    if search is not None:
+        body["search"] = search
+    if span_name is not None:
+        body["span_name"] = span_name
+    if customer_id is not None:
+        body["customer_id"] = customer_id
+    if session_id is not None:
+        body["session_id"] = session_id
+    if error is not None:
+        body["error"] = error
+    if tag:
+        body["tag"] = list(tag)
+    if dataset_id is not None:
+        body["dataset_id"] = dataset_id
+    if min_duration is not None:
+        body["min_duration"] = min_duration
+    if max_duration is not None:
+        body["max_duration"] = max_duration
+    if min_cost is not None:
+        body["min_cost"] = min_cost
+    if max_cost is not None:
+        body["max_cost"] = max_cost
+    if sort_field is not None:
+        body["sort_field"] = sort_field
+    if sort_dir is not None:
+        body["sort_dir"] = sort_dir
+    if start_time is not None:
+        body["start_time"] = start_time
+    if end_time is not None:
+        body["end_time"] = end_time
+    if limit is not None:
+        body["limit"] = limit
+    if cursor_created_at is not None:
+        body["cursorCreatedAt"] = cursor_created_at
+    if cursor_item_id is not None:
+        body["cursorItemId"] = cursor_item_id
+    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id'], 'properties': {'project_id': {'type': 'string'}, 'search': {'type': 'string'}, 'span_name': {'type': 'string'}, 'customer_id': {'type': 'string'}, 'session_id': {'type': 'string'}, 'error': {'type': 'string'}, 'tag': {'type': 'array', 'items': {'type': 'string'}}, 'dataset_id': {'type': 'string'}, 'min_duration': {'type': 'number'}, 'max_duration': {'type': 'number'}, 'min_cost': {'type': 'number'}, 'max_cost': {'type': 'number'}, 'sort_field': {'type': 'string', 'enum': ['created_at', 'span_name', 'duration', 'llm_cost']}, 'sort_dir': {'type': 'string', 'enum': ['asc', 'desc']}, 'start_time': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'end_time': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'limit': {'minimum': 1, 'maximum': 200, 'type': 'number'}, 'cursorCreatedAt': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'cursorItemId': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}}})
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@traces_group.command("span")
+@click.argument("project_id")
+@click.option("--spans", "spans", required=True, help="JSON value for spans.")
+@click.option("-d", "--data", "request_data", default=None, help="Full JSON body (overrides generated arguments; use - for stdin).")
+@click.option("-f", "--file", "request_file", type=click.Path(exists=True), default=None, help="Path to a JSON file for the request body.")
+@click.pass_context
+def traces_span(ctx, project_id, spans, request_data, request_file):
+    """Get trace span details."""
+    url = "/traces/span"
+    body = None
+    if request_data is not None:
+        if request_data == "-":
+            body = json.load(sys.stdin)
+        else:
+            body = json.loads(request_data)
+    elif request_file is not None:
+        with open(request_file) as f:
+            body = json.load(f)
+    else:
+        body = {}
+        body["project_id"] = project_id
+        body["spans"] = json.loads(spans)
+    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'spans'], 'properties': {'project_id': {'type': 'string'}, 'spans': {'minItems': 1, 'maxItems': 20, 'type': 'array', 'items': {'type': 'object', 'required': ['trace_id', 'span_id'], 'properties': {'trace_id': {'type': 'string'}, 'span_id': {'type': 'string'}}}}}})
+    result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
 
@@ -317,32 +596,37 @@ def traces_get(ctx, project_id, trace_id):
 @click.argument("trace_id")
 @click.pass_context
 def traces_spans(ctx, project_id, trace_id):
-    """Get all spans for a trace."""
-    url = f"/projects/{project_id}/traces/{trace_id}/spans"
-    result = ctx.obj["client"].request("GET", url)
+    """Get trace spans."""
+    url = "/traces/spans"
+    body = {}
+    body["project_id"] = project_id
+    body["trace_id"] = trace_id
+    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'trace_id'], 'properties': {'project_id': {'type': 'string'}, 'trace_id': {'type': 'string'}}})
+    result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
 
-@traces_group.command("behaviors")
+@traces_group.command("tags")
 @click.argument("project_id")
 @click.argument("trace_id")
 @click.pass_context
-def traces_behaviors(ctx, project_id, trace_id):
-    """Get behaviors detected on a trace."""
-    url = f"/projects/{project_id}/traces/{trace_id}/behaviors"
-    result = ctx.obj["client"].request("GET", url)
+def traces_tags(ctx, project_id, trace_id):
+    """Get trace tags."""
+    url = "/traces/tags"
+    body = {}
+    body["project_id"] = project_id
+    body["trace_id"] = trace_id
+    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'trace_id'], 'properties': {'project_id': {'type': 'string'}, 'trace_id': {'type': 'string'}}})
+    result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
 
 def register_commands(cli: click.Group) -> None:
     """Register all generated command groups on the root CLI."""
+    cli.add_command(automations_group, "automations")
     cli.add_command(behaviors_group, "behaviors")
-    cli.add_command(datasets_group, "datasets")
+    cli.add_command(docs_group, "docs")
     cli.add_command(judges_group, "judges")
-    cli.add_command(orgs_group, "orgs")
     cli.add_command(projects_group, "projects")
-    cli.add_command(prompts_group, "prompts")
-    cli.add_command(rules_group, "rules")
     cli.add_command(sessions_group, "sessions")
-    cli.add_command(tests_group, "tests")
     cli.add_command(traces_group, "traces")

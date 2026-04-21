@@ -7,8 +7,7 @@ import click
 from judgment_cli import __version__
 from judgment_cli.client import JudgmentClient
 from judgment_cli import config
-from judgment_cli.generated_commands import register_commands, traces_group
-from judgment_cli.commands import register_manual_commands
+from judgment_cli.generated_commands import register_commands
 
 
 @click.group()
@@ -105,7 +104,6 @@ def status() -> None:
 
 
 register_commands(cli)
-register_manual_commands({"traces": traces_group})
 
 
 def main() -> None:

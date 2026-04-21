@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-_DEFAULT_BASE_URL = "https://api2.judgmentlabs.ai"
+_DEFAULT_BASE_URL = "https://api3.judgmentlabs.ai"
 
 
 def _config_dir() -> Path:
