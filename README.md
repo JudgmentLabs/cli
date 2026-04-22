@@ -18,12 +18,13 @@ curl -fsSL https://github.com/JudgmentLabs/cli/releases/download/v0.1.0/install.
 
 This puts an isolated venv at `~/.local/share/judgment-cli/venv` and symlinks `judgment` into `~/.local/bin`. Override locations with `INSTALL_DIR=...` and `PREFIX=...`. Requires Python ≥ 3.9 — set `PYTHON=...` to pick a specific interpreter.
 
-### Homebrew (coming soon)
+### Homebrew
 
 ```bash
-brew tap JudgmentLabs/tap
-brew install judgment-cli
+brew install JudgmentLabs/tap/judgment-cli
 ```
+
+`brew upgrade judgment-cli` picks up new releases automatically. Formula source: [JudgmentLabs/homebrew-tap](https://github.com/JudgmentLabs/homebrew-tap).
 
 ### From source
 
@@ -104,23 +105,3 @@ make generate SPEC_URL=http://localhost:10006/openapi/json   # local dev
 ```
 
 This rewrites `src/judgment_cli/generated_commands.py` from the OpenAPI spec at `SPEC_URL`.
-
-### Releasing a new version
-
-Releases are cut automatically by `.github/workflows/release.yaml` on every merge to `main`. The bump type defaults to **patch**; prefix the merge commit message with `[Bump Minor Version]` or `[Bump Major Version]` to override. The workflow rewrites the version files, tags `vX.Y.Z`, and creates a GitHub Release whose tarball backs the `latest` curl installer.
-
-### Homebrew formula updates
-
-The Homebrew formula in `Formula/judgment-cli.rb` is mirrored to a separate [tap repo](https://docs.brew.sh/How-to-Create-and-Maintain-a-Tap) and updated manually after a release:
-
-```bash
-new=0.1.4
-sha=$(curl -sL https://github.com/JudgmentLabs/cli/archive/refs/tags/v$new.tar.gz | shasum -a 256 | awk '{print $1}')
-```
-
-Paste the new `url` + `sha256` into the formula. If any Python dep changed, regenerate the `resource` blocks with [`homebrew-pypi-poet`](https://github.com/tdsmith/homebrew-pypi-poet):
-
-```bash
-pip install homebrew-pypi-poet
-poet -f judgment-cli
-```

@@ -93,7 +93,13 @@ jobs:
           generate_release_notes: true
           files: dist/install.sh
           body: |
-            Install with curl:
+            Install with Homebrew:
+
+            ```bash
+            brew install JudgmentLabs/tap/judgment-cli
+            ```
+
+            Or with curl:
 
             ```bash
             curl -fsSL https://judgmentlabs.ai/install.sh | bash
@@ -106,6 +112,51 @@ jobs:
             ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout cli (the tagged release)
+        uses: actions/checkout@v4
+        with:
+          ref: v${{ needs.release.outputs.new_version }}
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Render formula
+        run: |
+          new=${{ needs.release.outputs.new_version }}
+          # GitHub takes a few seconds to publish the tag's source tarball.
+          for i in 1 2 3 4 5; do
+            if curl -fsI "https://github.com/JudgmentLabs/cli/archive/refs/tags/v$new.tar.gz" >/dev/null; then
+              break
+            fi
+            sleep 5
+          done
+          mkdir -p dist
+          python scripts/generate_formula.py "$new" . > dist/judgment-cli.rb
+
+      - name: Push formula to homebrew-tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          new=${{ needs.release.outputs.new_version }}
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/JudgmentLabs/homebrew-tap.git" tap
+          cp dist/judgment-cli.rb tap/judgment-cli.rb
+          cd tap
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add judgment-cli.rb
+          if git diff --cached --quiet; then
+            echo "Formula unchanged; nothing to push."
+            exit 0
+          fi
+          git commit -m "judgment-cli v$new"
+          git push origin HEAD:main
 
   cleanup:
     needs: release
