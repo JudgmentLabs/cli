@@ -20,14 +20,11 @@ from typing import Any
 
 import httpx
 
-# ---------------------------------------------------------------------------
-# Default spec location
-# ---------------------------------------------------------------------------
-DEFAULT_SPEC = "https://api3.judgmentlabs.ai/openapi/json"
+from help_overrides import command_help, option_help
 
+DEFAULT_SPEC = "https://api3.judgmentlabs.ai/openapi/json"
 EXCLUDED_PATHS = {"/", "/health/"}
 
-# Friendly group descriptions
 GROUP_DESCRIPTIONS: dict[str, str] = {
     "auth": "Authentication and user information",
     "automations": "Manage automations",
@@ -54,23 +51,6 @@ def load_spec(source: str) -> dict:
         return json.load(f)
 
 
-def build_operation_index(spec: dict) -> dict[str, dict]:
-    """Build {operationId: {path, method, operation}} from the spec."""
-    index: dict[str, dict] = {}
-    for path, path_item in spec.get("paths", {}).items():
-        for method, operation in path_item.items():
-            if not isinstance(operation, dict):
-                continue
-            op_id = operation.get("operationId")
-            if op_id:
-                index[op_id] = {
-                    "path": path,
-                    "method": method.upper(),
-                    "operation": operation,
-                }
-    return index
-
-
 def derive_group_and_command(path: str, method: str) -> tuple[str, str]:
     parts = [part for part in path.strip("/").split("/") if part]
     if not parts:
@@ -92,11 +72,14 @@ def derive_group_and_command(path: str, method: str) -> tuple[str, str]:
 
 
 def derive_description(operation: dict, group: str, command: str) -> str:
-    return operation.get("summary") or operation.get("description") or f"{command.replace('-', ' ').title()} {group}"
-
-
-def operation_sort_key(entry: dict[str, Any]) -> tuple[str, str, str]:
-    return entry["group"], entry["command"], entry["path"]
+    override = command_help(group, command)
+    if override:
+        return override
+    summary = operation.get("summary")
+    description = operation.get("description")
+    if summary and description:
+        return f"{summary}\n\n{description}"
+    return summary or description or f"{command.replace('-', ' ').title()} {group}"
 
 
 def collect_operations(spec: dict) -> list[dict[str, Any]]:
@@ -125,7 +108,7 @@ def collect_operations(spec: dict) -> list[dict[str, Any]]:
                     "operation": operation,
                 }
             )
-    operations.sort(key=operation_sort_key)
+    operations.sort(key=lambda e: (e["group"], e["command"], e["path"]))
     return operations
 
 
@@ -206,7 +189,40 @@ def click_choice_expr(schema: dict[str, Any]) -> str | None:
     return f"click.Choice([{quoted}])"
 
 
-def click_param_args(schema: dict[str, Any]) -> str:
+def _schema_description(schema: dict[str, Any]) -> str | None:
+    """Pull a human-readable description out of an OpenAPI schema, if any."""
+    desc = schema.get("description")
+    if desc:
+        return desc
+    for option in schema.get("anyOf", []):
+        if isinstance(option, dict) and option.get("description"):
+            return option["description"]
+    return None
+
+
+def _quote_help(text: str) -> str:
+    """Encode a string as a Python source literal."""
+    return repr(text)
+
+
+def _emit_docstring(description: str) -> str:
+    """Build the docstring source line for a generated command."""
+    short, _, long = description.partition("\n\n")
+    if not long:
+        if not short.endswith((".", "!", "?")):
+            short += "."
+        return f'    """{short}"""'
+    paragraphs = ["\b\n" + p for p in long.split("\n\n")]
+    full = short + "\n\n" + "\n\n".join(paragraphs)
+    return f"    {repr(full)}"
+
+
+def click_param_args(
+    schema: dict[str, Any],
+    *,
+    include_help: bool = False,
+    help_override: str | None = None,
+) -> str:
     args: list[str] = []
     choice_expr = click_choice_expr(schema)
     if choice_expr:
@@ -215,16 +231,20 @@ def click_param_args(schema: dict[str, Any]) -> str:
         type_expr = click_type_expr(schema)
         if type_expr:
             args.append(f"type={type_expr}")
+    if include_help:
+        desc = help_override or _schema_description(schema)
+        if desc:
+            args.append(f"help={_quote_help(desc)}")
     return f", {', '.join(args)}" if args else ""
 
 
-def extract_json_body_properties(operation: dict) -> tuple[list[dict[str, Any]], bool]:
+def extract_json_body_properties(operation: dict) -> list[dict[str, Any]]:
     request_body = operation.get("requestBody") or {}
     content = request_body.get("content") or {}
     json_content = content.get("application/json") or {}
     schema = json_content.get("schema") or {}
     if schema.get("type") != "object":
-        return [], bool(request_body.get("required"))
+        return []
 
     required = set(schema.get("required", []))
     props: list[dict[str, Any]] = []
@@ -238,15 +258,7 @@ def extract_json_body_properties(operation: dict) -> tuple[list[dict[str, Any]],
                 "scalar_array": _is_scalar_array_schema(prop_schema),
             }
         )
-    return props, bool(request_body.get("required"))
-
-
-def extract_json_body_schema(operation: dict) -> dict[str, Any]:
-    request_body = operation.get("requestBody") or {}
-    content = request_body.get("content") or {}
-    json_content = content.get("application/json") or {}
-    schema = json_content.get("schema") or {}
-    return schema if isinstance(schema, dict) else {}
+    return props
 
 
 # ---------------------------------------------------------------------------
@@ -266,8 +278,7 @@ def generate_command_code(
     """Generate the source lines for a single Click command."""
     path_params = extract_path_params(path)
     query_params = extract_query_params(operation)
-    body_props, _body_required = extract_json_body_properties(operation)
-    body_schema = extract_json_body_schema(operation)
+    body_props = extract_json_body_properties(operation)
     has_complex_body_props = any(
         not prop["scalar"] and not prop["scalar_array"] for prop in body_props
     )
@@ -282,28 +293,34 @@ def generate_command_code(
     for qp in query_params:
         opt = cli_option_name(qp["name"])
         var = py_var_name(qp["name"])
-        type_arg = click_param_args(qp["schema"])
+        override = option_help(group_name, cmd_name, qp["name"])
         if qp["required"]:
+            type_arg = click_param_args(qp["schema"])
             lines.append(f'@click.argument("{qp["name"]}"{type_arg})')
         else:
+            type_arg = click_param_args(qp["schema"], include_help=True, help_override=override)
             lines.append(f'@click.option("--{opt}", "{var}", default=None{type_arg})')
 
     if method != "GET":
         for prop in body_props:
             opt = cli_option_name(prop["name"])
             var = py_var_name(prop["name"])
-            type_arg = click_param_args(prop["schema"])
+            override = option_help(group_name, cmd_name, prop["name"])
             if prop["scalar"] and prop["required"]:
+                type_arg = click_param_args(prop["schema"])
                 lines.append(f'@click.argument("{prop["name"]}"{type_arg})')
             elif prop["scalar"]:
+                type_arg = click_param_args(prop["schema"], include_help=True, help_override=override)
                 lines.append(f'@click.option("--{opt}", "{var}", default=None{type_arg})')
             elif prop["scalar_array"]:
-                item_type_arg = click_param_args(_array_item_schema(prop["schema"]) or {})
-                lines.append(f'@click.option("--{opt}", "{var}", multiple=True{item_type_arg})')
-            elif prop["required"]:
-                lines.append(f'@click.option("--{opt}", "{var}", required=True, help="JSON value for {prop["name"]}.")')
+                item_type_arg = click_param_args(_array_item_schema(prop["schema"]) or {}, include_help=False)
+                desc = override or _schema_description(prop["schema"]) or f"Repeatable; one value per item for {prop['name']}."
+                lines.append(
+                    f'@click.option("--{opt}", "{var}", multiple=True{item_type_arg}, help={_quote_help(desc)})'
+                )
             else:
-                lines.append(f'@click.option("--{opt}", "{var}", default=None, help="JSON value for {prop["name"]}.")')
+                desc = override or _schema_description(prop["schema"]) or f"JSON value for {prop['name']}."
+                lines.append(f'@click.option("--{opt}", "{var}", default=None, help={_quote_help(desc)})')
 
         if has_complex_body_props:
             lines.append(
@@ -321,13 +338,10 @@ def generate_command_code(
         if has_complex_body_props:
             sig_parts += ["request_data", "request_file"]
     lines.append(f"def {func_name}({', '.join(sig_parts)}):")
-    lines.append(f'    """{description}."""')
+    lines.append(_emit_docstring(description))
 
     if path_params:
-        url_template = path
-        for pp in path_params:
-            url_template = url_template.replace(f"{{{pp}}}", f"{{{pp}}}")
-        lines.append(f'    url = f"{url_template}"')
+        lines.append(f'    url = f"{path}"')
     else:
         lines.append(f'    url = "{path}"')
 
@@ -349,6 +363,8 @@ def generate_command_code(
         lines.append("    _output(result)")
         return lines
 
+    required_complex = [p for p in body_props if not p["scalar"] and not p["scalar_array"] and p["required"]]
+
     if has_complex_body_props:
         lines.append("    body = None")
         lines.append("    if request_data is not None:")
@@ -360,6 +376,13 @@ def generate_command_code(
         lines.append("        with open(request_file) as f:")
         lines.append("            body = json.load(f)")
         lines.append("    else:")
+        for prop in required_complex:
+            var = py_var_name(prop["name"])
+            opt = cli_option_name(prop["name"])
+            lines.append(f"        if {var} is None:")
+            lines.append(
+                f'            raise click.UsageError("Missing option \'--{opt}\' (or use -d/-f to supply a full JSON body).")'
+            )
         lines.append("        body = {}")
         indent = "        "
     else:
@@ -377,14 +400,9 @@ def generate_command_code(
         elif prop["scalar_array"]:
             lines.append(f"{indent}if {var}:")
             lines.append(f'{indent}    body["{prop["name"]}"] = list({var})')
-        elif prop["required"]:
-            lines.append(f'{indent}body["{prop["name"]}"] = json.loads({var})')
         else:
             lines.append(f"{indent}if {var} is not None:")
             lines.append(f'{indent}    body["{prop["name"]}"] = json.loads({var})')
-
-    if body_schema:
-        lines.append(f"    _apply_request_defaults(body, {body_schema!r})")
 
     lines.append(f'    result = ctx.obj["client"].request("{method}", url, json_body=body)')
     lines.append("    _output(result)")
@@ -412,65 +430,7 @@ def generate_all(spec: dict) -> str:
 
         import click
 
-
-        def _output(data: object) -> None:
-            \"\"\"Pretty-print response data as JSON.\"\"\"
-            click.echo(json.dumps(data, indent=2, default=str))
-
-
-        def _schema_type(schema: dict) -> str | None:
-            if "type" in schema:
-                return schema["type"]
-            for option in schema.get("anyOf", []):
-                if isinstance(option, dict) and option.get("type") != "null":
-                    return option.get("type")
-            return None
-
-
-        def _apply_request_defaults(body: object, schema: dict) -> None:
-            \"\"\"Fill in schema-driven defaults for generated POST bodies.\"\"\"
-            if not isinstance(body, dict) or not isinstance(schema, dict):
-                return
-
-            required = set(schema.get("required", []))
-            properties = schema.get("properties", {})
-
-            for name, prop_schema in properties.items():
-                if not isinstance(prop_schema, dict):
-                    continue
-
-                prop_type = _schema_type(prop_schema)
-
-                if name not in body:
-                    if name == "filters" and prop_type == "array":
-                        body[name] = []
-                    elif name in required and prop_type == "object":
-                        body[name] = {}
-                    else:
-                        continue
-
-                value = body.get(name)
-
-                if prop_type == "object" and isinstance(value, dict):
-                    child_required = set(prop_schema.get("required", []))
-                    child_properties = prop_schema.get("properties", {})
-                    for child_name, child_schema in child_properties.items():
-                        if child_name in value or not isinstance(child_schema, dict):
-                            continue
-                        if child_name not in child_required:
-                            continue
-                        any_of = child_schema.get("anyOf", [])
-                        if any(
-                            isinstance(option, dict) and option.get("type") == "null"
-                            for option in any_of
-                        ):
-                            value[child_name] = None
-                    _apply_request_defaults(value, prop_schema)
-                elif prop_type == "array" and isinstance(value, list):
-                    item_schema = prop_schema.get("items")
-                    if isinstance(item_schema, dict):
-                        for item in value:
-                            _apply_request_defaults(item, item_schema)
+        from judgment_cli.ui import output as _output
 
     """)
 

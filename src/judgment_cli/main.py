@@ -8,38 +8,25 @@ from judgment_cli import __version__
 from judgment_cli.client import JudgmentClient
 from judgment_cli import config
 from judgment_cli.generated_commands import register_commands
+from judgment_cli.ui import mask_key
 
 
 @click.group()
-@click.option(
-    "--base-url",
-    default=None,
-    help="Judgment API base URL (env: JUDGMENT_BASE_URL).",
-)
-@click.option(
-    "--api-key",
-    default=None,
-    help="API key for authentication (env: JUDGMENT_API_KEY).",
-)
-@click.option(
-    "--org-id",
-    default=None,
-    help="Organization ID (env: JUDGMENT_ORG_ID).",
-)
 @click.version_option(version=__version__, prog_name="judgment")
 @click.pass_context
-def cli(ctx: click.Context, base_url: str | None, api_key: str | None, org_id: str | None) -> None:
-    """Judgment CLI — interact with the Judgment API from the command line."""
+def cli(ctx: click.Context) -> None:
+    """Judgment CLI — interact with the Judgment API from the command line.
+
+    Credentials are read from environment variables (JUDGMENT_API_KEY,
+    JUDGMENT_BASE_URL, JUDGMENT_ORG_ID) or the local config file written by
+    `judgment login`. Environment variables take precedence over the config file.
+    """
     ctx.ensure_object(dict)
-    resolved_url, resolved_key, resolved_org = config.resolve(
-        flag_base_url=base_url,
-        flag_api_key=api_key,
-        flag_org_id=org_id,
-    )
+    creds = config.resolve()
     ctx.obj["client"] = JudgmentClient(
-        base_url=resolved_url.rstrip("/"),
-        api_key=resolved_key,
-        organization_id=resolved_org,
+        base_url=creds.base_url.rstrip("/"),
+        api_key=creds.api_key,
+        organization_id=creds.org_id,
     )
 
 
@@ -58,7 +45,7 @@ def login(api_key: str, org_id: str, base_url: str | None) -> None:
         base_url=base_url,
     )
     click.echo(f"Credentials saved to {path}")
-    click.echo(f"API key: {config.mask_key(api_key)}")
+    click.echo(f"API key: {mask_key(api_key)}")
     if org_id:
         click.echo(f"Org ID:  {org_id}")
 
@@ -81,7 +68,6 @@ def status() -> None:
 
     import os
     sources = [
-        ("Flag", "--api-key / --base-url / --org-id", "(passed at invocation)"),
         ("Env", "JUDGMENT_API_KEY", os.environ.get("JUDGMENT_API_KEY", "")),
         ("Env", "JUDGMENT_BASE_URL", os.environ.get("JUDGMENT_BASE_URL", "")),
         ("Env", "JUDGMENT_ORG_ID", os.environ.get("JUDGMENT_ORG_ID", "")),
@@ -92,12 +78,12 @@ def status() -> None:
             if cfg:
                 click.echo(f"  {kind:6s}  {name}")
                 for k, v in cfg.items():
-                    display = config.mask_key(v) if "key" in k else v
+                    display = mask_key(v) if "key" in k else v
                     click.echo(f"          {k}: {display}")
             else:
                 click.echo(f"  {kind:6s}  {name}  (not found)")
         elif val:
-            display = config.mask_key(val) if "KEY" in name else val
+            display = mask_key(val) if "KEY" in name else val
             click.echo(f"  {kind:6s}  {name} = {display}")
         else:
             click.echo(f"  {kind:6s}  {name}  (not set)")

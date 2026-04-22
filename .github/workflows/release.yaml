@@ -1,0 +1,125 @@
+name: Release on Main Merge
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      new_version: ${{ steps.bump.outputs.new_version }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Get latest released version
+        id: latest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Defaults to v0.0.0 when no releases exist yet (first run).
+          tag=$(gh release view --json tagName -q .tagName 2>/dev/null || echo "v0.0.0")
+          version=${tag#v}
+          echo "version=$version" >> $GITHUB_OUTPUT
+          echo "Latest released version: $version"
+
+      - name: Determine bump type
+        id: bump_type
+        run: |
+          # Bump type is patch by default; minor/major are opt-in via commit message prefix.
+          msg=$(git log -1 --pretty=%B)
+          if [[ "$msg" == "[Bump Major Version]"* ]]; then
+            type=major
+          elif [[ "$msg" == "[Bump Minor Version]"* ]]; then
+            type=minor
+          else
+            type=patch
+          fi
+          echo "type=$type" >> $GITHUB_OUTPUT
+          echo "Bump type: $type"
+
+      - name: Compute new version
+        id: bump
+        run: |
+          IFS='.' read -r major minor patch <<< "${{ steps.latest.outputs.version }}"
+          case "${{ steps.bump_type.outputs.type }}" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+          new_version="$major.$minor.$patch"
+          echo "new_version=$new_version" >> $GITHUB_OUTPUT
+          echo "New version: $new_version"
+
+      - name: Bump version, commit, and tag
+        run: |
+          new=${{ steps.bump.outputs.new_version }}
+          python update_version.py "$new"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add pyproject.toml src/judgment_cli/__init__.py
+          git commit -m "Release v$new [skip ci]"
+          git tag "v$new"
+          git push origin main
+          git push origin "v$new"
+
+      - name: Render version-pinned installer
+        run: |
+          new=v${{ steps.bump.outputs.new_version }}
+          mkdir -p dist
+          sed "s|@@VERSION@@|$new|g" install.sh > dist/install.sh
+          chmod +x dist/install.sh
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.bump.outputs.new_version }}
+          generate_release_notes: true
+          files: dist/install.sh
+          body: |
+            Install with curl:
+
+            ```bash
+            curl -fsSL https://judgmentlabs.ai/install.sh | bash
+            ```
+
+            Or pin this exact version:
+
+            ```bash
+            curl -fsSL https://github.com/JudgmentLabs/cli/releases/download/v${{ steps.bump.outputs.new_version }}/install.sh | bash
+            ```
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  cleanup:
+    needs: release
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Delete tag and release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          new=v${{ needs.release.outputs.new_version }}
+          gh release delete "$new" --yes 2>/dev/null || true
+          git push --delete origin "$new" 2>/dev/null || true

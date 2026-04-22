@@ -2,15 +2,10 @@ class JudgmentCli < Formula
   include Language::Python::Virtualenv
 
   desc "CLI for the Judgment API"
-  homepage "https://github.com/judgment-labs/judgment-cli"
-  # Update the URL and sha256 when cutting a release:
-  #   1. Tag the release:  git tag v0.1.0 && git push --tags
-  #   2. Create a GitHub release with the tag
-  #   3. Download the tarball and compute sha256:
-  #        curl -sL https://github.com/judgment-labs/judgment-cli/archive/refs/tags/v0.1.0.tar.gz | shasum -a 256
-  #   4. Fill in url + sha256 below, then run:
-  #        brew install --build-from-source ./Formula/judgment-cli.rb
-  url "https://github.com/judgment-labs/judgment-cli/archive/refs/tags/v0.1.0.tar.gz"
+  homepage "https://github.com/JudgmentLabs/cli"
+  # Update url + sha256 when cutting a release. See README.md
+  # ("Releasing a new Homebrew version") for the full procedure.
+  url "https://github.com/JudgmentLabs/cli/archive/refs/tags/v0.1.0.tar.gz"
   sha256 "PLACEHOLDER_SHA256"
   license "MIT"
 
@@ -54,6 +49,11 @@ class JudgmentCli < Formula
   resource "h11" do
     url "https://files.pythonhosted.org/packages/f5/38/3af3d3633a34a3316095b39c8e8fb4853a28a536e55d347bd8d8e9a14b03/h11-0.14.0.tar.gz"
     sha256 "8f09a5220f5a5e34e3e27d7e89d4a7e87f4e4b806c8e60e3ab2bfb4bc65d3e0e"
+  end
+
+  resource "platformdirs" do
+    url "https://files.pythonhosted.org/packages/9f/4a/0883b8e3802965322523f0b200ecf33d31f10991d0401162f4b23c698b42/platformdirs-4.9.6.tar.gz"
+    sha256 "3bfa75b0ad0db84096ae777218481852c0ebc6c727b3168c1b9e0118e458cf0a"
   end
 
   def install

@@ -8,65 +8,7 @@ import sys
 
 import click
 
-
-def _output(data: object) -> None:
-    """Pretty-print response data as JSON."""
-    click.echo(json.dumps(data, indent=2, default=str))
-
-
-def _schema_type(schema: dict) -> str | None:
-    if "type" in schema:
-        return schema["type"]
-    for option in schema.get("anyOf", []):
-        if isinstance(option, dict) and option.get("type") != "null":
-            return option.get("type")
-    return None
-
-
-def _apply_request_defaults(body: object, schema: dict) -> None:
-    """Fill in schema-driven defaults for generated POST bodies."""
-    if not isinstance(body, dict) or not isinstance(schema, dict):
-        return
-
-    required = set(schema.get("required", []))
-    properties = schema.get("properties", {})
-
-    for name, prop_schema in properties.items():
-        if not isinstance(prop_schema, dict):
-            continue
-
-        prop_type = _schema_type(prop_schema)
-
-        if name not in body:
-            if name == "filters" and prop_type == "array":
-                body[name] = []
-            elif name in required and prop_type == "object":
-                body[name] = {}
-            else:
-                continue
-
-        value = body.get(name)
-
-        if prop_type == "object" and isinstance(value, dict):
-            child_required = set(prop_schema.get("required", []))
-            child_properties = prop_schema.get("properties", {})
-            for child_name, child_schema in child_properties.items():
-                if child_name in value or not isinstance(child_schema, dict):
-                    continue
-                if child_name not in child_required:
-                    continue
-                any_of = child_schema.get("anyOf", [])
-                if any(
-                    isinstance(option, dict) and option.get("type") == "null"
-                    for option in any_of
-                ):
-                    value[child_name] = None
-            _apply_request_defaults(value, prop_schema)
-        elif prop_type == "array" and isinstance(value, list):
-            item_schema = prop_schema.get("items")
-            if isinstance(item_schema, dict):
-                for item in value:
-                    _apply_request_defaults(item, item_schema)
+from judgment_cli.ui import output as _output
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -88,7 +30,6 @@ def automations_list(ctx, project_id):
     url = "/automations/list"
     body = {}
     body["project_id"] = project_id
-    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id'], 'properties': {'project_id': {'type': 'string'}}})
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
@@ -119,7 +60,6 @@ def behaviors_get(ctx, project_id, behavior_id, start_date, end_date):
         body["start_date"] = start_date
     if end_date is not None:
         body["end_date"] = end_date
-    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'behavior_id'], 'properties': {'project_id': {'type': 'string'}, 'behavior_id': {'type': 'string'}, 'start_date': {'type': 'string'}, 'end_date': {'type': 'string'}}})
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
@@ -132,7 +72,6 @@ def behaviors_list(ctx, project_id):
     url = "/behaviors/list"
     body = {}
     body["project_id"] = project_id
-    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id'], 'properties': {'project_id': {'type': 'string'}}})
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
@@ -170,7 +109,6 @@ def docs_search(ctx, query, match_count):
     body["query"] = query
     if match_count is not None:
         body["match_count"] = match_count
-    _apply_request_defaults(body, {'type': 'object', 'required': ['query'], 'properties': {'query': {'type': 'string'}, 'match_count': {'minimum': 1, 'maximum': 20, 'type': 'number'}}})
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
@@ -195,7 +133,6 @@ def judges_settings(ctx, project_id, judge_id):
     body = {}
     body["project_id"] = project_id
     body["judge_id"] = judge_id
-    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'judge_id'], 'properties': {'project_id': {'type': 'string'}, 'judge_id': {'type': 'string'}}})
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
@@ -239,123 +176,44 @@ def sessions_get(ctx, project_id, session_id):
     body = {}
     body["project_id"] = project_id
     body["session_id"] = session_id
-    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'session_id'], 'properties': {'project_id': {'type': 'string'}, 'session_id': {'type': 'string'}}})
-    result = ctx.obj["client"].request("POST", url, json_body=body)
-    _output(result)
-
-
-@sessions_group.command("list")
-@click.argument("project_id")
-@click.option("--session-id", "session_id", default=None)
-@click.option("--behavior", "behavior", multiple=True)
-@click.option("--min-traces", "min_traces", default=None, type=float)
-@click.option("--max-traces", "max_traces", default=None, type=float)
-@click.option("--min-latency", "min_latency", default=None, type=float)
-@click.option("--max-latency", "max_latency", default=None, type=float)
-@click.option("--min-cost", "min_cost", default=None, type=float)
-@click.option("--max-cost", "max_cost", default=None, type=float)
-@click.option("--sort-field", "sort_field", default=None, type=click.Choice(['created_at', 'num_traces', 'latency', 'llm_cost']))
-@click.option("--sort-dir", "sort_dir", default=None, type=click.Choice(['asc', 'desc']))
-@click.option("--start-time", "start_time", default=None)
-@click.option("--end-time", "end_time", default=None)
-@click.option("--limit", "limit", default=None, type=float)
-@click.option("--cursor-sort-value", "cursor_sort_value", default=None)
-@click.option("--cursor-item-id", "cursor_item_id", default=None)
-@click.pass_context
-def sessions_list(ctx, project_id, session_id, behavior, min_traces, max_traces, min_latency, max_latency, min_cost, max_cost, sort_field, sort_dir, start_time, end_time, limit, cursor_sort_value, cursor_item_id):
-    """List sessions."""
-    url = "/sessions/list"
-    body = {}
-    body["project_id"] = project_id
-    if session_id is not None:
-        body["session_id"] = session_id
-    if behavior:
-        body["behavior"] = list(behavior)
-    if min_traces is not None:
-        body["min_traces"] = min_traces
-    if max_traces is not None:
-        body["max_traces"] = max_traces
-    if min_latency is not None:
-        body["min_latency"] = min_latency
-    if max_latency is not None:
-        body["max_latency"] = max_latency
-    if min_cost is not None:
-        body["min_cost"] = min_cost
-    if max_cost is not None:
-        body["max_cost"] = max_cost
-    if sort_field is not None:
-        body["sort_field"] = sort_field
-    if sort_dir is not None:
-        body["sort_dir"] = sort_dir
-    if start_time is not None:
-        body["start_time"] = start_time
-    if end_time is not None:
-        body["end_time"] = end_time
-    if limit is not None:
-        body["limit"] = limit
-    if cursor_sort_value is not None:
-        body["cursorSortValue"] = cursor_sort_value
-    if cursor_item_id is not None:
-        body["cursorItemId"] = cursor_item_id
-    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id'], 'properties': {'project_id': {'type': 'string'}, 'session_id': {'type': 'string'}, 'behavior': {'type': 'array', 'items': {'format': 'uuid', 'type': 'string'}}, 'min_traces': {'type': 'number'}, 'max_traces': {'type': 'number'}, 'min_latency': {'type': 'number'}, 'max_latency': {'type': 'number'}, 'min_cost': {'type': 'number'}, 'max_cost': {'type': 'number'}, 'sort_field': {'type': 'string', 'enum': ['created_at', 'num_traces', 'latency', 'llm_cost']}, 'sort_dir': {'type': 'string', 'enum': ['asc', 'desc']}, 'start_time': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'end_time': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'limit': {'minimum': 1, 'maximum': 200, 'type': 'number'}, 'cursorSortValue': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'cursorItemId': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}}})
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
 
 @sessions_group.command("search")
 @click.argument("project_id")
-@click.option("--session-id", "session_id", default=None)
-@click.option("--behavior", "behavior", multiple=True)
-@click.option("--min-traces", "min_traces", default=None, type=float)
-@click.option("--max-traces", "max_traces", default=None, type=float)
-@click.option("--min-latency", "min_latency", default=None, type=float)
-@click.option("--max-latency", "max_latency", default=None, type=float)
-@click.option("--min-cost", "min_cost", default=None, type=float)
-@click.option("--max-cost", "max_cost", default=None, type=float)
-@click.option("--sort-field", "sort_field", default=None, type=click.Choice(['created_at', 'num_traces', 'latency', 'llm_cost']))
-@click.option("--sort-dir", "sort_dir", default=None, type=click.Choice(['asc', 'desc']))
-@click.option("--start-time", "start_time", default=None)
-@click.option("--end-time", "end_time", default=None)
-@click.option("--limit", "limit", default=None, type=float)
-@click.option("--cursor-sort-value", "cursor_sort_value", default=None)
-@click.option("--cursor-item-id", "cursor_item_id", default=None)
+@click.option("--filters", "filters", default=None, help='Filter expressions, ANDed together. Each item is {"field":<field>,"op":<op>,"value":<value>}. Allowed ops depend on the field\'s type.\n\n\x08\nOp groups:\n  STRING_OPS  = "=" | "!=" | "contains" | "does_not_contain"\n  NUMERIC_OPS = "=" | "!=" | "<" | "<=" | ">" | ">="\n  ARRAY_ANY   = "any"   (matches when the row\'s array overlaps the supplied values)\n\nString fields (op in STRING_OPS, value is a string): session_id.\n\nNumeric fields (op in NUMERIC_OPS, value is a number): trace_count, latency (nanoseconds), total_cost (USD).\n\nArray fields (op = "any", value is an array): behaviors (behavior UUIDs).\n\nExample: --filters \'[{"field":"trace_count","op":">=","value":5}]\'\n')
+@click.option("--time-range", "time_range", default=None, help='{"start_time":<iso8601-string>|null,"end_time":<iso8601-string>|null}. Either bound may be null to leave that side open. Invalid timestamps return 400.')
+@click.option("--pagination", "pagination", default=None, help='{"limit":<int 1-200>,"cursorSortValue":<string>|null,"cursorItemId":<string>|null}.\n\nFirst page: pass null for both cursor fields. Each response returns nextCursor:{sort_value,session_id} (or null when hasMore=false); copy those into cursorSortValue and cursorItemId for the next page.')
+@click.option("--sort-by", "sort_by", default=None, help='{"field":<sort_field>,"direction":"asc"|"desc"} where sort_field is one of: created_at, num_traces, latency, llm_cost. Default when omitted: {"field":"created_at","direction":"desc"}.')
+@click.option("-d", "--data", "request_data", default=None, help="Full JSON body (overrides generated arguments; use - for stdin).")
+@click.option("-f", "--file", "request_file", type=click.Path(exists=True), default=None, help="Path to a JSON file for the request body.")
 @click.pass_context
-def sessions_search(ctx, project_id, session_id, behavior, min_traces, max_traces, min_latency, max_latency, min_cost, max_cost, sort_field, sort_dir, start_time, end_time, limit, cursor_sort_value, cursor_item_id):
-    """Search sessions."""
+def sessions_search(ctx, project_id, filters, time_range, pagination, sort_by, request_data, request_file):
+    'Search sessions in a project.\n\n\x08\nFiltering, sorting, time bounds, and pagination are passed as JSON via the body fields below — see each flag\'s description for its full reference.\n\n\x08\n\x08\nExample: judgment sessions search <PROJECT_ID> \\\n  --filters \'[{"field":"trace_count","op":">=","value":5}]\' \\\n  --sort-by \'{"field":"latency","direction":"desc"}\' \\\n  --pagination \'{"limit":25,"cursorSortValue":null,"cursorItemId":null}\''
     url = "/sessions/search"
-    body = {}
-    body["project_id"] = project_id
-    if session_id is not None:
-        body["session_id"] = session_id
-    if behavior:
-        body["behavior"] = list(behavior)
-    if min_traces is not None:
-        body["min_traces"] = min_traces
-    if max_traces is not None:
-        body["max_traces"] = max_traces
-    if min_latency is not None:
-        body["min_latency"] = min_latency
-    if max_latency is not None:
-        body["max_latency"] = max_latency
-    if min_cost is not None:
-        body["min_cost"] = min_cost
-    if max_cost is not None:
-        body["max_cost"] = max_cost
-    if sort_field is not None:
-        body["sort_field"] = sort_field
-    if sort_dir is not None:
-        body["sort_dir"] = sort_dir
-    if start_time is not None:
-        body["start_time"] = start_time
-    if end_time is not None:
-        body["end_time"] = end_time
-    if limit is not None:
-        body["limit"] = limit
-    if cursor_sort_value is not None:
-        body["cursorSortValue"] = cursor_sort_value
-    if cursor_item_id is not None:
-        body["cursorItemId"] = cursor_item_id
-    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id'], 'properties': {'project_id': {'type': 'string'}, 'session_id': {'type': 'string'}, 'behavior': {'type': 'array', 'items': {'format': 'uuid', 'type': 'string'}}, 'min_traces': {'type': 'number'}, 'max_traces': {'type': 'number'}, 'min_latency': {'type': 'number'}, 'max_latency': {'type': 'number'}, 'min_cost': {'type': 'number'}, 'max_cost': {'type': 'number'}, 'sort_field': {'type': 'string', 'enum': ['created_at', 'num_traces', 'latency', 'llm_cost']}, 'sort_dir': {'type': 'string', 'enum': ['asc', 'desc']}, 'start_time': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'end_time': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'limit': {'minimum': 1, 'maximum': 200, 'type': 'number'}, 'cursorSortValue': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'cursorItemId': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}}})
+    body = None
+    if request_data is not None:
+        if request_data == "-":
+            body = json.load(sys.stdin)
+        else:
+            body = json.loads(request_data)
+    elif request_file is not None:
+        with open(request_file) as f:
+            body = json.load(f)
+    else:
+        if pagination is None:
+            raise click.UsageError("Missing option '--pagination' (or use -d/-f to supply a full JSON body).")
+        body = {}
+        body["project_id"] = project_id
+        if filters is not None:
+            body["filters"] = json.loads(filters)
+        if time_range is not None:
+            body["time_range"] = json.loads(time_range)
+        if pagination is not None:
+            body["pagination"] = json.loads(pagination)
+        if sort_by is not None:
+            body["sort_by"] = json.loads(sort_by)
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
@@ -370,7 +228,6 @@ def sessions_trace_behaviors(ctx, project_id, session_id):
     body = {}
     body["project_id"] = project_id
     body["session_id"] = session_id
-    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'session_id'], 'properties': {'project_id': {'type': 'string'}, 'session_id': {'type': 'string'}}})
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
@@ -385,7 +242,6 @@ def sessions_trace_ids(ctx, project_id, session_id):
     body = {}
     body["project_id"] = project_id
     body["session_id"] = session_id
-    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'session_id'], 'properties': {'project_id': {'type': 'string'}, 'session_id': {'type': 'string'}}})
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
@@ -410,7 +266,6 @@ def traces_behaviors(ctx, project_id, trace_id):
     body = {}
     body["project_id"] = project_id
     body["trace_id"] = trace_id
-    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'trace_id'], 'properties': {'project_id': {'type': 'string'}, 'trace_id': {'type': 'string'}}})
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
@@ -425,148 +280,51 @@ def traces_get(ctx, project_id, trace_id):
     body = {}
     body["project_id"] = project_id
     body["trace_id"] = trace_id
-    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'trace_id'], 'properties': {'project_id': {'type': 'string'}, 'trace_id': {'type': 'string'}}})
-    result = ctx.obj["client"].request("POST", url, json_body=body)
-    _output(result)
-
-
-@traces_group.command("list")
-@click.argument("project_id")
-@click.option("--search", "search", default=None)
-@click.option("--span-name", "span_name", default=None)
-@click.option("--customer-id", "customer_id", default=None)
-@click.option("--session-id", "session_id", default=None)
-@click.option("--error", "error", default=None)
-@click.option("--tag", "tag", multiple=True)
-@click.option("--dataset-id", "dataset_id", default=None)
-@click.option("--min-duration", "min_duration", default=None, type=float)
-@click.option("--max-duration", "max_duration", default=None, type=float)
-@click.option("--min-cost", "min_cost", default=None, type=float)
-@click.option("--max-cost", "max_cost", default=None, type=float)
-@click.option("--sort-field", "sort_field", default=None, type=click.Choice(['created_at', 'span_name', 'duration', 'llm_cost']))
-@click.option("--sort-dir", "sort_dir", default=None, type=click.Choice(['asc', 'desc']))
-@click.option("--start-time", "start_time", default=None)
-@click.option("--end-time", "end_time", default=None)
-@click.option("--limit", "limit", default=None, type=float)
-@click.option("--cursor-created-at", "cursor_created_at", default=None)
-@click.option("--cursor-item-id", "cursor_item_id", default=None)
-@click.pass_context
-def traces_list(ctx, project_id, search, span_name, customer_id, session_id, error, tag, dataset_id, min_duration, max_duration, min_cost, max_cost, sort_field, sort_dir, start_time, end_time, limit, cursor_created_at, cursor_item_id):
-    """List traces."""
-    url = "/traces/list"
-    body = {}
-    body["project_id"] = project_id
-    if search is not None:
-        body["search"] = search
-    if span_name is not None:
-        body["span_name"] = span_name
-    if customer_id is not None:
-        body["customer_id"] = customer_id
-    if session_id is not None:
-        body["session_id"] = session_id
-    if error is not None:
-        body["error"] = error
-    if tag:
-        body["tag"] = list(tag)
-    if dataset_id is not None:
-        body["dataset_id"] = dataset_id
-    if min_duration is not None:
-        body["min_duration"] = min_duration
-    if max_duration is not None:
-        body["max_duration"] = max_duration
-    if min_cost is not None:
-        body["min_cost"] = min_cost
-    if max_cost is not None:
-        body["max_cost"] = max_cost
-    if sort_field is not None:
-        body["sort_field"] = sort_field
-    if sort_dir is not None:
-        body["sort_dir"] = sort_dir
-    if start_time is not None:
-        body["start_time"] = start_time
-    if end_time is not None:
-        body["end_time"] = end_time
-    if limit is not None:
-        body["limit"] = limit
-    if cursor_created_at is not None:
-        body["cursorCreatedAt"] = cursor_created_at
-    if cursor_item_id is not None:
-        body["cursorItemId"] = cursor_item_id
-    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id'], 'properties': {'project_id': {'type': 'string'}, 'search': {'type': 'string'}, 'span_name': {'type': 'string'}, 'customer_id': {'type': 'string'}, 'session_id': {'type': 'string'}, 'error': {'type': 'string'}, 'tag': {'type': 'array', 'items': {'type': 'string'}}, 'dataset_id': {'type': 'string'}, 'min_duration': {'type': 'number'}, 'max_duration': {'type': 'number'}, 'min_cost': {'type': 'number'}, 'max_cost': {'type': 'number'}, 'sort_field': {'type': 'string', 'enum': ['created_at', 'span_name', 'duration', 'llm_cost']}, 'sort_dir': {'type': 'string', 'enum': ['asc', 'desc']}, 'start_time': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'end_time': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'limit': {'minimum': 1, 'maximum': 200, 'type': 'number'}, 'cursorCreatedAt': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'cursorItemId': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}}})
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
 
 @traces_group.command("search")
 @click.argument("project_id")
-@click.option("--search", "search", default=None)
-@click.option("--span-name", "span_name", default=None)
-@click.option("--customer-id", "customer_id", default=None)
-@click.option("--session-id", "session_id", default=None)
-@click.option("--error", "error", default=None)
-@click.option("--tag", "tag", multiple=True)
-@click.option("--dataset-id", "dataset_id", default=None)
-@click.option("--min-duration", "min_duration", default=None, type=float)
-@click.option("--max-duration", "max_duration", default=None, type=float)
-@click.option("--min-cost", "min_cost", default=None, type=float)
-@click.option("--max-cost", "max_cost", default=None, type=float)
-@click.option("--sort-field", "sort_field", default=None, type=click.Choice(['created_at', 'span_name', 'duration', 'llm_cost']))
-@click.option("--sort-dir", "sort_dir", default=None, type=click.Choice(['asc', 'desc']))
-@click.option("--start-time", "start_time", default=None)
-@click.option("--end-time", "end_time", default=None)
-@click.option("--limit", "limit", default=None, type=float)
-@click.option("--cursor-created-at", "cursor_created_at", default=None)
-@click.option("--cursor-item-id", "cursor_item_id", default=None)
+@click.option("--filters", "filters", default=None, help='Filter expressions, ANDed together. Each item is {"field":<field>,"op":<op>,"value":<value>}. Allowed ops depend on the field\'s type.\n\n\x08\nOp groups:\n  STRING_OPS  = "=" | "!=" | "contains" | "does_not_contain" | "exists" | "is_absent"\n  NUMERIC_OPS = "=" | "!=" | "<" | "<=" | ">" | ">="\n  ARRAY_ANY   = "any"   (matches when the row\'s array overlaps the supplied values)\n\nString fields (op in STRING_OPS, value is a string): span_name, customer_id, customer_user_id, session_id, error, dataset_id.\n\nNumeric fields (op in NUMERIC_OPS, value is a number): duration (nanoseconds), llm_cost (USD).\n\nArray fields (op = "any", value is an array): tags (strings), rules_invoked (rule names from this project, strings), behaviors (behavior UUIDs).\n\n\x08\nSpecial:\n  full_text_search       op = "contains", value is a string searched across span attribute text.\n  span_attributes_roots  matches a single span attribute key/value:\n                           {"field":"span_attributes_roots","key":"<attribute-name>","op":<STRING_OPS>,"value":"<string>"}\n\nExample: --filters \'[{"field":"span_name","op":"=","value":"agent.run"}]\'\n')
+@click.option("--sort-by", "sort_by", default=None, help='{"field":<sort_field>,"direction":"asc"|"desc"} where sort_field is one of: created_at, span_name, duration, llm_cost. Default when omitted: {"field":"created_at","direction":"desc"}.')
+@click.option("--time-range", "time_range", default=None, help='{"start_time":<iso8601-string>|null,"end_time":<iso8601-string>|null}. Either bound may be null to leave that side open. Invalid timestamps return 400.')
+@click.option("--pagination", "pagination", default=None, help='{"limit":<int 1-200>,"cursorSortValue":<string>|null,"cursorItemId":<string>|null}.\n\nFirst page: pass null for both cursor fields. Each response returns nextCursor:{sort_value,trace_id} (or null when hasMore=false); copy those into cursorSortValue and cursorItemId for the next page.')
+@click.option("-d", "--data", "request_data", default=None, help="Full JSON body (overrides generated arguments; use - for stdin).")
+@click.option("-f", "--file", "request_file", type=click.Path(exists=True), default=None, help="Path to a JSON file for the request body.")
 @click.pass_context
-def traces_search(ctx, project_id, search, span_name, customer_id, session_id, error, tag, dataset_id, min_duration, max_duration, min_cost, max_cost, sort_field, sort_dir, start_time, end_time, limit, cursor_created_at, cursor_item_id):
-    """Search traces."""
+def traces_search(ctx, project_id, filters, sort_by, time_range, pagination, request_data, request_file):
+    'Search traces in a project.\n\n\x08\nFiltering, sorting, time bounds, and pagination are passed as JSON via the body fields below — see each flag\'s description for its full reference.\n\n\x08\n\x08\nExample: judgment traces search <PROJECT_ID> \\\n  --filters \'[{"field":"span_name","op":"=","value":"agent.run"}]\' \\\n  --sort-by \'{"field":"llm_cost","direction":"desc"}\' \\\n  --pagination \'{"limit":25,"cursorSortValue":null,"cursorItemId":null}\''
     url = "/traces/search"
-    body = {}
-    body["project_id"] = project_id
-    if search is not None:
-        body["search"] = search
-    if span_name is not None:
-        body["span_name"] = span_name
-    if customer_id is not None:
-        body["customer_id"] = customer_id
-    if session_id is not None:
-        body["session_id"] = session_id
-    if error is not None:
-        body["error"] = error
-    if tag:
-        body["tag"] = list(tag)
-    if dataset_id is not None:
-        body["dataset_id"] = dataset_id
-    if min_duration is not None:
-        body["min_duration"] = min_duration
-    if max_duration is not None:
-        body["max_duration"] = max_duration
-    if min_cost is not None:
-        body["min_cost"] = min_cost
-    if max_cost is not None:
-        body["max_cost"] = max_cost
-    if sort_field is not None:
-        body["sort_field"] = sort_field
-    if sort_dir is not None:
-        body["sort_dir"] = sort_dir
-    if start_time is not None:
-        body["start_time"] = start_time
-    if end_time is not None:
-        body["end_time"] = end_time
-    if limit is not None:
-        body["limit"] = limit
-    if cursor_created_at is not None:
-        body["cursorCreatedAt"] = cursor_created_at
-    if cursor_item_id is not None:
-        body["cursorItemId"] = cursor_item_id
-    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id'], 'properties': {'project_id': {'type': 'string'}, 'search': {'type': 'string'}, 'span_name': {'type': 'string'}, 'customer_id': {'type': 'string'}, 'session_id': {'type': 'string'}, 'error': {'type': 'string'}, 'tag': {'type': 'array', 'items': {'type': 'string'}}, 'dataset_id': {'type': 'string'}, 'min_duration': {'type': 'number'}, 'max_duration': {'type': 'number'}, 'min_cost': {'type': 'number'}, 'max_cost': {'type': 'number'}, 'sort_field': {'type': 'string', 'enum': ['created_at', 'span_name', 'duration', 'llm_cost']}, 'sort_dir': {'type': 'string', 'enum': ['asc', 'desc']}, 'start_time': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'end_time': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'limit': {'minimum': 1, 'maximum': 200, 'type': 'number'}, 'cursorCreatedAt': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}, 'cursorItemId': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}}})
+    body = None
+    if request_data is not None:
+        if request_data == "-":
+            body = json.load(sys.stdin)
+        else:
+            body = json.loads(request_data)
+    elif request_file is not None:
+        with open(request_file) as f:
+            body = json.load(f)
+    else:
+        if pagination is None:
+            raise click.UsageError("Missing option '--pagination' (or use -d/-f to supply a full JSON body).")
+        body = {}
+        body["project_id"] = project_id
+        if filters is not None:
+            body["filters"] = json.loads(filters)
+        if sort_by is not None:
+            body["sort_by"] = json.loads(sort_by)
+        if time_range is not None:
+            body["time_range"] = json.loads(time_range)
+        if pagination is not None:
+            body["pagination"] = json.loads(pagination)
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
 
 @traces_group.command("span")
 @click.argument("project_id")
-@click.option("--spans", "spans", required=True, help="JSON value for spans.")
+@click.option("--spans", "spans", default=None, help='JSON value for spans.')
 @click.option("-d", "--data", "request_data", default=None, help="Full JSON body (overrides generated arguments; use - for stdin).")
 @click.option("-f", "--file", "request_file", type=click.Path(exists=True), default=None, help="Path to a JSON file for the request body.")
 @click.pass_context
@@ -583,10 +341,12 @@ def traces_span(ctx, project_id, spans, request_data, request_file):
         with open(request_file) as f:
             body = json.load(f)
     else:
+        if spans is None:
+            raise click.UsageError("Missing option '--spans' (or use -d/-f to supply a full JSON body).")
         body = {}
         body["project_id"] = project_id
-        body["spans"] = json.loads(spans)
-    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'spans'], 'properties': {'project_id': {'type': 'string'}, 'spans': {'minItems': 1, 'maxItems': 20, 'type': 'array', 'items': {'type': 'object', 'required': ['trace_id', 'span_id'], 'properties': {'trace_id': {'type': 'string'}, 'span_id': {'type': 'string'}}}}}})
+        if spans is not None:
+            body["spans"] = json.loads(spans)
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
@@ -601,7 +361,6 @@ def traces_spans(ctx, project_id, trace_id):
     body = {}
     body["project_id"] = project_id
     body["trace_id"] = trace_id
-    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'trace_id'], 'properties': {'project_id': {'type': 'string'}, 'trace_id': {'type': 'string'}}})
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
@@ -616,7 +375,6 @@ def traces_tags(ctx, project_id, trace_id):
     body = {}
     body["project_id"] = project_id
     body["trace_id"] = trace_id
-    _apply_request_defaults(body, {'type': 'object', 'required': ['project_id', 'trace_id'], 'properties': {'project_id': {'type': 'string'}, 'trace_id': {'type': 'string'}}})
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 

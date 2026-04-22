@@ -1,33 +1,39 @@
 # Judgment CLI
 
-Command-line interface for the [Judgment API](https://docs.judgmentlabs.ai). Auto-generated from the OpenAPI spec.
+Command-line interface for the [Judgment API](https://docs.judgmentlabs.ai). Commands are auto-generated from the API's OpenAPI spec, so the CLI surface always matches the server.
 
 ## Installation
 
-### From source (pip)
+### Quick install (curl)
+
+```bash
+curl -fsSL https://judgmentlabs.ai/install.sh | bash
+```
+
+Pin a specific version:
+
+```bash
+curl -fsSL https://github.com/JudgmentLabs/cli/releases/download/v0.1.0/install.sh | bash
+```
+
+This puts an isolated venv at `~/.local/share/judgment-cli/venv` and symlinks `judgment` into `~/.local/bin`. Override locations with `INSTALL_DIR=...` and `PREFIX=...`. Requires Python ≥ 3.9 — set `PYTHON=...` to pick a specific interpreter.
+
+### Homebrew (coming soon)
+
+```bash
+brew tap JudgmentLabs/tap
+brew install judgment-cli
+```
+
+### From source
 
 ```bash
 pip install .
 ```
 
-### Development mode
-
-```bash
-pip install -e ".[dev]"
-```
-
-### Homebrew (coming soon)
-
-```bash
-brew tap judgment-labs/tap
-brew install judgment-cli
-```
-
 ## Authentication
 
 ### Login (recommended)
-
-Run `judgment login` once to store your credentials locally:
 
 ```bash
 judgment login
@@ -35,124 +41,88 @@ judgment login
 # Organization ID (leave blank to skip): org-...
 ```
 
-Credentials are saved to `~/.config/judgment/credentials.json` (file permissions set to `0600`).
+Credentials are written atomically with `0600` permissions to a platform-appropriate config dir resolved via [`platformdirs`](https://pypi.org/project/platformdirs/):
+
+| OS      | Path                                                                |
+|---------|---------------------------------------------------------------------|
+| macOS   | `~/Library/Application Support/judgment/credentials.json`           |
+| Linux   | `$XDG_CONFIG_HOME/judgment/credentials.json` (default `~/.config/...`) |
+| Windows | `%APPDATA%\JudgmentLabs\judgment\credentials.json`                  |
 
 ### Other methods
 
-You can also authenticate via environment variables or flags. The CLI resolves credentials in this order (highest priority first):
-
-| Priority | Method | Example |
-|---|---|---|
-| 1 | Flags | `--api-key sk-...` |
-| 2 | Env vars | `JUDGMENT_API_KEY=sk-...` |
-| 3 | Config file | `~/.config/judgment/credentials.json` |
-
-### Check auth status
+| Priority | Method      | Example                                                  |
+|----------|-------------|----------------------------------------------------------|
+| 1        | Env vars    | `JUDGMENT_API_KEY`, `JUDGMENT_ORG_ID`, `JUDGMENT_BASE_URL` |
+| 2        | Config file | `judgment login`                                         |
 
 ```bash
-judgment status
-```
-
-### Logout
-
-```bash
-judgment logout
+judgment status   # show resolved sources
+judgment logout   # delete the credentials file
 ```
 
 ## Usage
 
-```bash
-# List your organizations
-judgment orgs list
+Run `judgment --help` for the full command list, and `judgment <group> <command> --help` for the flags on a specific command.
 
-# List projects
+```bash
+# Projects
 judgment projects list
 
-# Create a project
-judgment projects create -d '{"name": "my-project"}'
+# Traces
+judgment traces search    <PROJECT_ID> --pagination '{"limit":25,"cursorSortValue":null,"cursorItemId":null}'
+judgment traces get       <PROJECT_ID> <TRACE_ID>
+judgment traces spans     <PROJECT_ID> <TRACE_ID>
+judgment traces tags      <PROJECT_ID> <TRACE_ID>
+judgment traces behaviors <PROJECT_ID> <TRACE_ID>
+judgment traces span      <PROJECT_ID> --spans '[{"trace_id":"...","span_id":"..."}]'
 
-# List traces (with default pagination)
-judgment traces list <PROJECT_ID>
+# Sessions
+judgment sessions search          <PROJECT_ID> --pagination '{"limit":25,"cursorSortValue":null,"cursorItemId":null}'
+judgment sessions get             <PROJECT_ID> <SESSION_ID>
+judgment sessions trace-ids       <PROJECT_ID> <SESSION_ID>
+judgment sessions trace-behaviors <PROJECT_ID> <SESSION_ID>
 
-# List traces with custom filters
-judgment traces list <PROJECT_ID> -d '{"pagination": {"limit": 10, "cursorSortValue": null, "cursorItemId": null}}'
+# Behaviors / judges / automations
+judgment behaviors list   <PROJECT_ID>
+judgment behaviors get    <PROJECT_ID> <BEHAVIOR_ID>
+judgment judges settings  <PROJECT_ID> <JUDGE_ID>
+judgment automations list <PROJECT_ID>
 
-# Get trace details
-judgment traces get <PROJECT_ID> <TRACE_ID>
-
-# Get spans for a trace
-judgment traces spans <PROJECT_ID> <TRACE_ID>
-
-# List judges
-judgment judges list <PROJECT_ID>
-
-# List behaviors
-judgment behaviors list <PROJECT_ID>
-
-# List prompts
-judgment prompts list <PROJECT_ID>
-
-# Get a specific prompt
-judgment prompts get <PROJECT_ID> <PROMPT_NAME>
+# Docs
+judgment docs search "how do I instrument my app"
+judgment docs read   /docs/getting-started
 ```
 
-## Available Commands
+For commands that take a JSON body (`traces search`, `sessions search`, `traces span`), pass `-d <json>` (or `-d -` for stdin) or `-f <path>` instead of the individual flags.
 
-| Group | Command | Description |
-|---|---|---|
-| `orgs` | `list` | List organizations |
-| `orgs` | `get` | Get organization details |
-| `orgs` | `usage` | Get organization usage |
-| `projects` | `list` | List all projects |
-| `projects` | `get` | Get a project by ID |
-| `traces` | `list` | List and filter traces |
-| `traces` | `get` | Get trace details |
-| `traces` | `spans` | Get spans for a trace |
-| `traces` | `behaviors` | Get behaviors on a trace |
-| `datasets` | `list` | List datasets |
-| `judges` | `list` | List judges |
-| `judges` | `get` | Get judge details |
-| `judges` | `models` | List available models |
-| `behaviors` | `list` | List behaviors |
-| `behaviors` | `get` | Get behavior details |
-| `tests` | `list` | List test runs |
-| `prompts` | `list` | List prompts |
-| `prompts` | `get` | Get latest prompt version |
-| `prompts` | `versions` | List prompt versions |
-| `rules` | `list` | List rules |
-| `sessions` | `get` | Get session details |
+## Development
 
-## Regenerating Commands
-
-CLI commands are auto-generated from the Judgment OpenAPI spec. To regenerate after API changes:
+### Regenerating commands
 
 ```bash
-make generate
+make generate                                                # uses prod
+make generate SPEC_URL=http://localhost:10006/openapi/json   # local dev
 ```
 
-This runs `scripts/generate_cli.py` which reads the OpenAPI spec and updates `src/judgment_cli/generated_commands.py`.
+This rewrites `src/judgment_cli/generated_commands.py` from the OpenAPI spec at `SPEC_URL`.
 
-### Adding new commands
+### Releasing a new version
 
-Edit the `INCLUDE_OPERATIONS` list in `scripts/generate_cli.py` to add or remove CLI commands. Each entry maps an OpenAPI `operationId` to a CLI group and command name:
+Releases are cut automatically by `.github/workflows/release.yaml` on every merge to `main`. The bump type defaults to **patch**; prefix the merge commit message with `[Bump Minor Version]` or `[Bump Major Version]` to override. The workflow rewrites the version files, tags `vX.Y.Z`, and creates a GitHub Release whose tarball backs the `latest` curl installer.
 
-```python
-{
-    "operation_id": "getProjectsByProject_idDatasets",
-    "group": "datasets",
-    "command": "list",
-    "description": "List all datasets in a project",
-}
+### Homebrew formula updates
+
+The Homebrew formula in `Formula/judgment-cli.rb` is mirrored to a separate [tap repo](https://docs.brew.sh/How-to-Create-and-Maintain-a-Tap) and updated manually after a release:
+
+```bash
+new=0.1.4
+sha=$(curl -sL https://github.com/JudgmentLabs/cli/archive/refs/tags/v$new.tar.gz | shasum -a 256 | awk '{print $1}')
 ```
 
-Then run `make generate`.
+Paste the new `url` + `sha256` into the formula. If any Python dep changed, regenerate the `resource` blocks with [`homebrew-pypi-poet`](https://github.com/tdsmith/homebrew-pypi-poet):
 
-## Homebrew Distribution
-
-The `Formula/judgment-cli.rb` file is a Homebrew formula template. To distribute via Homebrew:
-
-1. Create a [Homebrew tap](https://docs.brew.sh/How-to-Create-and-Maintain-a-Tap) repository (e.g. `judgment-labs/homebrew-tap`)
-2. Tag a release and create a GitHub release tarball
-3. Update the formula's `url` and `sha256` with the release tarball details
-4. Copy the formula into the tap repository
-5. Users can then install with `brew tap judgment-labs/tap && brew install judgment-cli`
+```bash
+pip install homebrew-pypi-poet
+poet -f judgment-cli
+```
