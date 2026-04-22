@@ -94,8 +94,6 @@ judgment docs search "how do I instrument my app"
 judgment docs read   /docs/getting-started
 ```
 
-For commands that take a JSON body (`traces search`, `sessions search`, `traces span`), pass `-d <json>` (or `-d -` for stdin) or `-f <path>` instead of the individual flags.
-
 ## Development
 
 ### Regenerating commands

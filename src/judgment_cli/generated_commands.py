@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import sys
 
 import click
 
@@ -119,7 +118,7 @@ def docs_search(ctx, query, match_count):
 
 @click.group("judges")
 def judges_group() -> None:
-    """Upload and manage custom judges (scorers)."""
+    """Manage judges (scorers)."""
     pass
 
 
@@ -184,36 +183,21 @@ def sessions_get(ctx, project_id, session_id):
 @click.argument("project_id")
 @click.option("--filters", "filters", default=None, help='Filter expressions, ANDed together. Each item is {"field":<field>,"op":<op>,"value":<value>}. Allowed ops depend on the field\'s type.\n\n\x08\nOp groups:\n  STRING_OPS  = "=" | "!=" | "contains" | "does_not_contain"\n  NUMERIC_OPS = "=" | "!=" | "<" | "<=" | ">" | ">="\n  ARRAY_ANY   = "any"   (matches when the row\'s array overlaps the supplied values)\n\nString fields (op in STRING_OPS, value is a string): session_id.\n\nNumeric fields (op in NUMERIC_OPS, value is a number): trace_count, latency (nanoseconds), total_cost (USD).\n\nArray fields (op = "any", value is an array): behaviors (behavior UUIDs).\n\nExample: --filters \'[{"field":"trace_count","op":">=","value":5}]\'\n')
 @click.option("--time-range", "time_range", default=None, help='{"start_time":<iso8601-string>|null,"end_time":<iso8601-string>|null}. Either bound may be null to leave that side open. Invalid timestamps return 400.')
-@click.option("--pagination", "pagination", default=None, help='{"limit":<int 1-200>,"cursorSortValue":<string>|null,"cursorItemId":<string>|null}.\n\nFirst page: pass null for both cursor fields. Each response returns nextCursor:{sort_value,session_id} (or null when hasMore=false); copy those into cursorSortValue and cursorItemId for the next page.')
+@click.option("--pagination", "pagination", required=True, help='{"limit":<int 1-200>,"cursorSortValue":<string>|null,"cursorItemId":<string>|null}.\n\nFirst page: pass null for both cursor fields. Each response returns nextCursor:{sort_value,session_id} (or null when hasMore=false); copy those into cursorSortValue and cursorItemId for the next page.')
 @click.option("--sort-by", "sort_by", default=None, help='{"field":<sort_field>,"direction":"asc"|"desc"} where sort_field is one of: created_at, num_traces, latency, llm_cost. Default when omitted: {"field":"created_at","direction":"desc"}.')
-@click.option("-d", "--data", "request_data", default=None, help="Full JSON body (overrides generated arguments; use - for stdin).")
-@click.option("-f", "--file", "request_file", type=click.Path(exists=True), default=None, help="Path to a JSON file for the request body.")
 @click.pass_context
-def sessions_search(ctx, project_id, filters, time_range, pagination, sort_by, request_data, request_file):
+def sessions_search(ctx, project_id, filters, time_range, pagination, sort_by):
     'Search sessions in a project.\n\n\x08\nFiltering, sorting, time bounds, and pagination are passed as JSON via the body fields below — see each flag\'s description for its full reference.\n\n\x08\n\x08\nExample: judgment sessions search <PROJECT_ID> \\\n  --filters \'[{"field":"trace_count","op":">=","value":5}]\' \\\n  --sort-by \'{"field":"latency","direction":"desc"}\' \\\n  --pagination \'{"limit":25,"cursorSortValue":null,"cursorItemId":null}\''
     url = "/sessions/search"
-    body = None
-    if request_data is not None:
-        if request_data == "-":
-            body = json.load(sys.stdin)
-        else:
-            body = json.loads(request_data)
-    elif request_file is not None:
-        with open(request_file) as f:
-            body = json.load(f)
-    else:
-        if pagination is None:
-            raise click.UsageError("Missing option '--pagination' (or use -d/-f to supply a full JSON body).")
-        body = {}
-        body["project_id"] = project_id
-        if filters is not None:
-            body["filters"] = json.loads(filters)
-        if time_range is not None:
-            body["time_range"] = json.loads(time_range)
-        if pagination is not None:
-            body["pagination"] = json.loads(pagination)
-        if sort_by is not None:
-            body["sort_by"] = json.loads(sort_by)
+    body = {}
+    body["project_id"] = project_id
+    if filters is not None:
+        body["filters"] = json.loads(filters)
+    if time_range is not None:
+        body["time_range"] = json.loads(time_range)
+    body["pagination"] = json.loads(pagination)
+    if sort_by is not None:
+        body["sort_by"] = json.loads(sort_by)
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
@@ -289,64 +273,34 @@ def traces_get(ctx, project_id, trace_id):
 @click.option("--filters", "filters", default=None, help='Filter expressions, ANDed together. Each item is {"field":<field>,"op":<op>,"value":<value>}. Allowed ops depend on the field\'s type.\n\n\x08\nOp groups:\n  STRING_OPS  = "=" | "!=" | "contains" | "does_not_contain" | "exists" | "is_absent"\n  NUMERIC_OPS = "=" | "!=" | "<" | "<=" | ">" | ">="\n  ARRAY_ANY   = "any"   (matches when the row\'s array overlaps the supplied values)\n\nString fields (op in STRING_OPS, value is a string): span_name, customer_id, customer_user_id, session_id, error, dataset_id.\n\nNumeric fields (op in NUMERIC_OPS, value is a number): duration (nanoseconds), llm_cost (USD).\n\nArray fields (op = "any", value is an array): tags (strings), rules_invoked (rule names from this project, strings), behaviors (behavior UUIDs).\n\n\x08\nSpecial:\n  full_text_search       op = "contains", value is a string searched across span attribute text.\n  span_attributes_roots  matches a single span attribute key/value:\n                           {"field":"span_attributes_roots","key":"<attribute-name>","op":<STRING_OPS>,"value":"<string>"}\n\nExample: --filters \'[{"field":"span_name","op":"=","value":"agent.run"}]\'\n')
 @click.option("--sort-by", "sort_by", default=None, help='{"field":<sort_field>,"direction":"asc"|"desc"} where sort_field is one of: created_at, span_name, duration, llm_cost. Default when omitted: {"field":"created_at","direction":"desc"}.')
 @click.option("--time-range", "time_range", default=None, help='{"start_time":<iso8601-string>|null,"end_time":<iso8601-string>|null}. Either bound may be null to leave that side open. Invalid timestamps return 400.')
-@click.option("--pagination", "pagination", default=None, help='{"limit":<int 1-200>,"cursorSortValue":<string>|null,"cursorItemId":<string>|null}.\n\nFirst page: pass null for both cursor fields. Each response returns nextCursor:{sort_value,trace_id} (or null when hasMore=false); copy those into cursorSortValue and cursorItemId for the next page.')
-@click.option("-d", "--data", "request_data", default=None, help="Full JSON body (overrides generated arguments; use - for stdin).")
-@click.option("-f", "--file", "request_file", type=click.Path(exists=True), default=None, help="Path to a JSON file for the request body.")
+@click.option("--pagination", "pagination", required=True, help='{"limit":<int 1-200>,"cursorSortValue":<string>|null,"cursorItemId":<string>|null}.\n\nFirst page: pass null for both cursor fields. Each response returns nextCursor:{sort_value,trace_id} (or null when hasMore=false); copy those into cursorSortValue and cursorItemId for the next page.')
 @click.pass_context
-def traces_search(ctx, project_id, filters, sort_by, time_range, pagination, request_data, request_file):
+def traces_search(ctx, project_id, filters, sort_by, time_range, pagination):
     'Search traces in a project.\n\n\x08\nFiltering, sorting, time bounds, and pagination are passed as JSON via the body fields below — see each flag\'s description for its full reference.\n\n\x08\n\x08\nExample: judgment traces search <PROJECT_ID> \\\n  --filters \'[{"field":"span_name","op":"=","value":"agent.run"}]\' \\\n  --sort-by \'{"field":"llm_cost","direction":"desc"}\' \\\n  --pagination \'{"limit":25,"cursorSortValue":null,"cursorItemId":null}\''
     url = "/traces/search"
-    body = None
-    if request_data is not None:
-        if request_data == "-":
-            body = json.load(sys.stdin)
-        else:
-            body = json.loads(request_data)
-    elif request_file is not None:
-        with open(request_file) as f:
-            body = json.load(f)
-    else:
-        if pagination is None:
-            raise click.UsageError("Missing option '--pagination' (or use -d/-f to supply a full JSON body).")
-        body = {}
-        body["project_id"] = project_id
-        if filters is not None:
-            body["filters"] = json.loads(filters)
-        if sort_by is not None:
-            body["sort_by"] = json.loads(sort_by)
-        if time_range is not None:
-            body["time_range"] = json.loads(time_range)
-        if pagination is not None:
-            body["pagination"] = json.loads(pagination)
+    body = {}
+    body["project_id"] = project_id
+    if filters is not None:
+        body["filters"] = json.loads(filters)
+    if sort_by is not None:
+        body["sort_by"] = json.loads(sort_by)
+    if time_range is not None:
+        body["time_range"] = json.loads(time_range)
+    body["pagination"] = json.loads(pagination)
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
 
 @traces_group.command("span")
 @click.argument("project_id")
-@click.option("--spans", "spans", default=None, help='JSON value for spans.')
-@click.option("-d", "--data", "request_data", default=None, help="Full JSON body (overrides generated arguments; use - for stdin).")
-@click.option("-f", "--file", "request_file", type=click.Path(exists=True), default=None, help="Path to a JSON file for the request body.")
+@click.option("--spans", "spans", required=True, help='JSON value for spans.')
 @click.pass_context
-def traces_span(ctx, project_id, spans, request_data, request_file):
+def traces_span(ctx, project_id, spans):
     """Get trace span details."""
     url = "/traces/span"
-    body = None
-    if request_data is not None:
-        if request_data == "-":
-            body = json.load(sys.stdin)
-        else:
-            body = json.loads(request_data)
-    elif request_file is not None:
-        with open(request_file) as f:
-            body = json.load(f)
-    else:
-        if spans is None:
-            raise click.UsageError("Missing option '--spans' (or use -d/-f to supply a full JSON body).")
-        body = {}
-        body["project_id"] = project_id
-        if spans is not None:
-            body["spans"] = json.loads(spans)
+    body = {}
+    body["project_id"] = project_id
+    body["spans"] = json.loads(spans)
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 

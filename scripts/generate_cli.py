@@ -279,9 +279,6 @@ def generate_command_code(
     path_params = extract_path_params(path)
     query_params = extract_query_params(operation)
     body_props = extract_json_body_properties(operation)
-    has_complex_body_props = any(
-        not prop["scalar"] and not prop["scalar_array"] for prop in body_props
-    )
 
     lines: list[str] = []
 
@@ -320,23 +317,16 @@ def generate_command_code(
                 )
             else:
                 desc = override or _schema_description(prop["schema"]) or f"JSON value for {prop['name']}."
-                lines.append(f'@click.option("--{opt}", "{var}", default=None, help={_quote_help(desc)})')
-
-        if has_complex_body_props:
-            lines.append(
-                '@click.option("-d", "--data", "request_data", default=None, help="Full JSON body (overrides generated arguments; use - for stdin).")'
-            )
-            lines.append(
-                '@click.option("-f", "--file", "request_file", type=click.Path(exists=True), default=None, help="Path to a JSON file for the request body.")'
-            )
+                required_arg = ", required=True" if prop["required"] else ", default=None"
+                lines.append(
+                    f'@click.option("--{opt}", "{var}"{required_arg}, help={_quote_help(desc)})'
+                )
 
     lines.append("@click.pass_context")
 
     sig_parts = ["ctx"] + path_params + [py_var_name(q["name"]) for q in query_params]
     if method != "GET":
         sig_parts += [py_var_name(prop["name"]) for prop in body_props]
-        if has_complex_body_props:
-            sig_parts += ["request_data", "request_file"]
     lines.append(f"def {func_name}({', '.join(sig_parts)}):")
     lines.append(_emit_docstring(description))
 
@@ -363,46 +353,24 @@ def generate_command_code(
         lines.append("    _output(result)")
         return lines
 
-    required_complex = [p for p in body_props if not p["scalar"] and not p["scalar_array"] and p["required"]]
-
-    if has_complex_body_props:
-        lines.append("    body = None")
-        lines.append("    if request_data is not None:")
-        lines.append('        if request_data == "-":')
-        lines.append("            body = json.load(sys.stdin)")
-        lines.append("        else:")
-        lines.append("            body = json.loads(request_data)")
-        lines.append("    elif request_file is not None:")
-        lines.append("        with open(request_file) as f:")
-        lines.append("            body = json.load(f)")
-        lines.append("    else:")
-        for prop in required_complex:
-            var = py_var_name(prop["name"])
-            opt = cli_option_name(prop["name"])
-            lines.append(f"        if {var} is None:")
-            lines.append(
-                f'            raise click.UsageError("Missing option \'--{opt}\' (or use -d/-f to supply a full JSON body).")'
-            )
-        lines.append("        body = {}")
-        indent = "        "
-    else:
-        lines.append("    body = {}")
-        indent = "    "
-
+    lines.append("    body = {}")
     for prop in body_props:
         var = py_var_name(prop["name"])
         if prop["scalar"]:
             if prop["required"]:
-                lines.append(f'{indent}body["{prop["name"]}"] = {var}')
+                lines.append(f'    body["{prop["name"]}"] = {var}')
             else:
-                lines.append(f"{indent}if {var} is not None:")
-                lines.append(f'{indent}    body["{prop["name"]}"] = {var}')
+                lines.append(f"    if {var} is not None:")
+                lines.append(f'        body["{prop["name"]}"] = {var}')
         elif prop["scalar_array"]:
-            lines.append(f"{indent}if {var}:")
-            lines.append(f'{indent}    body["{prop["name"]}"] = list({var})')
+            lines.append(f"    if {var}:")
+            lines.append(f'        body["{prop["name"]}"] = list({var})')
         else:
-            lines.append(f"{indent}if {var} is not None:")
-            lines.append(f'{indent}    body["{prop["name"]}"] = json.loads({var})')
+            if prop["required"]:
+                lines.append(f'    body["{prop["name"]}"] = json.loads({var})')
+            else:
+                lines.append(f"    if {var} is not None:")
+                lines.append(f'        body["{prop["name"]}"] = json.loads({var})')
 
     lines.append(f'    result = ctx.obj["client"].request("{method}", url, json_body=body)')
     lines.append("    _output(result)")
@@ -426,7 +394,6 @@ def generate_all(spec: dict) -> str:
         from __future__ import annotations
 
         import json
-        import sys
 
         import click
 
