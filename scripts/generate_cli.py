@@ -23,7 +23,7 @@ import httpx
 from help_overrides import command_help, option_help
 
 DEFAULT_SPEC = "https://api3.judgmentlabs.ai/openapi/json"
-EXCLUDED_PATHS = {"/", "/health/"}
+EXCLUDED_PATHS = {"/", "/health/", "/judges/upload"}
 
 GROUP_DESCRIPTIONS: dict[str, str] = {
     "auth": "Authentication and user information",

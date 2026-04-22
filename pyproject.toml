@@ -19,6 +19,7 @@ classifiers = [
 dependencies = [
     "click>=8.0",
     "httpx>=0.24",
+    "pathspec>=0.11",
     "platformdirs>=4.0",
 ]
 

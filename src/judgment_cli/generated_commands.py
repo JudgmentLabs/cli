@@ -119,7 +119,7 @@ def docs_search(ctx, query, match_count):
 
 @click.group("judges")
 def judges_group() -> None:
-    """Manage judges (scorers)."""
+    """Upload and manage custom judges (scorers)."""
     pass
 
 

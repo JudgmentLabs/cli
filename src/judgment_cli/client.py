@@ -18,6 +18,14 @@ class JudgmentClient:
         self.organization_id = organization_id
         self._client = httpx.Client(timeout=60, follow_redirects=True)
 
+    def _auth_headers(self) -> dict[str, str]:
+        headers: dict[str, str] = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        if self.organization_id:
+            headers["X-Organization-Id"] = self.organization_id
+        return headers
+
     def request(
         self,
         method: str,
@@ -26,11 +34,7 @@ class JudgmentClient:
         json_body: object = None,
     ) -> object:
         url = f"{self.base_url}{path}"
-        headers: dict[str, str] = {}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
-        if self.organization_id:
-            headers["X-Organization-Id"] = self.organization_id
+        headers = self._auth_headers()
 
         kwargs: dict = {"headers": headers}
         if params:
@@ -44,6 +48,29 @@ class JudgmentClient:
         else:
             headers["Content-Type"] = "application/json"
 
+        return self._send(method, url, kwargs)
+
+    def multipart(
+        self,
+        method: str,
+        path: str,
+        data: dict[str, str] | None = None,
+        files: dict[str, tuple[str, bytes, str]] | None = None,
+    ) -> object:
+        """Send a ``multipart/form-data`` request.
+
+        ``data`` is text form fields; ``files`` maps field names to
+        ``(filename, content, content_type)`` tuples.
+        """
+        url = f"{self.base_url}{path}"
+        kwargs: dict = {
+            "headers": self._auth_headers(),
+            "data": data or {},
+            "files": files or {},
+        }
+        return self._send(method, url, kwargs)
+
+    def _send(self, method: str, url: str, kwargs: dict) -> object:
         try:
             r = self._client.request(method, url, **kwargs)
         except httpx.RequestError as exc:
