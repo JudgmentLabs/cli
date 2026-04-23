@@ -130,13 +130,19 @@ jobs:
       - name: Render formula
         run: |
           new=${{ needs.release.outputs.new_version }}
+          tarball="https://github.com/JudgmentLabs/cli/archive/refs/tags/v$new.tar.gz"
           # GitHub takes a few seconds to publish the tag's source tarball.
           for i in 1 2 3 4 5; do
-            if curl -fsI "https://github.com/JudgmentLabs/cli/archive/refs/tags/v$new.tar.gz" >/dev/null; then
+            if curl -fsI "$tarball" >/dev/null; then
+              ready=1
               break
             fi
             sleep 5
           done
+          if [ -z "${ready:-}" ]; then
+            echo "::error::source tarball $tarball never became available" >&2
+            exit 1
+          fi
           mkdir -p dist
           python scripts/generate_formula.py "$new" . > dist/judgment-cli.rb
 

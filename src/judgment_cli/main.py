@@ -34,20 +34,75 @@ def cli(ctx: click.Context) -> None:
 
 
 @cli.command()
-@click.option("--api-key", prompt="API key", hide_input=True, help="Your Judgment API key.")
-@click.option("--org-id", prompt="Organization ID (leave blank to skip)", default="", help="Organization ID.")
-@click.option("--base-url", default=None, help="Custom API base URL.")
-def login(api_key: str, org_id: str, base_url: str | None) -> None:
+def login() -> None:
     """Authenticate and store credentials locally."""
-    path = config.save(
-        api_key=api_key,
-        org_id=org_id or None,
-        base_url=base_url,
-    )
+    api_key = click.prompt("API key", hide_input=True)
+    org_id = click.prompt("Organization ID", default="", show_default=False) or None
+
+    path = config.save(api_key=api_key, org_id=org_id)
     click.echo(f"Credentials saved to {path}")
     click.echo(f"API key: {mask_key(api_key)}")
     if org_id:
         click.echo(f"Org ID:  {org_id}")
+
+
+@cli.command()
+def configure() -> None:
+    """Update stored credentials interactively.
+
+    Each prompt shows the current value in brackets — press Enter to keep it,
+    or type a new value and press Enter to replace it.
+    """
+    cfg = config.load()
+    api_key = _prompt_field("API key", cfg.get("api_key", ""), hide=True)
+    org_id = _prompt_field("Organization ID", cfg.get("org_id", ""))
+
+    path = config.save(
+        api_key=api_key,
+        org_id=org_id or None,
+        base_url=cfg.get("base_url"),
+    )
+    click.echo(f"Credentials saved to {path}")
+
+
+def _prompt_field(label: str, current: str, *, hide: bool = False) -> str:
+    """Prompt for a single field, returning ``current`` if the user hits Enter."""
+    display = (mask_key(current) if hide else current) or "None"
+    new = click.prompt(
+        f"{label} [{display}]",
+        default="",
+        show_default=False,
+        hide_input=hide,
+    )
+    return new or current
+
+
+@cli.command()
+@click.argument("shell", type=click.Choice(["bash", "zsh", "fish"]))
+def completion(shell: str) -> None:
+    """Print a shell-completion script for SHELL.
+
+    Eval the output from your shell's rc file:
+
+    \b
+      # bash (~/.bashrc)
+      eval "$(judgment completion bash)"
+
+    \b
+      # zsh (~/.zshrc)
+      eval "$(judgment completion zsh)"
+
+    \b
+      # fish (~/.config/fish/config.fish)
+      judgment completion fish | source
+    """
+    from click.shell_completion import get_completion_class
+
+    completer_cls = get_completion_class(shell)
+    if completer_cls is None:
+        raise click.UsageError(f"Shell '{shell}' is not supported.")
+    completer = completer_cls(cli, {}, "judgment", "_JUDGMENT_COMPLETE")
+    click.echo(completer.source())
 
 
 @cli.command()

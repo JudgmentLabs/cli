@@ -11,7 +11,7 @@ from platformdirs import user_config_dir
 
 from judgment_cli.env import optional_env_var
 
-_DEFAULT_BASE_URL = "https://api3.judgmentlabs.ai"
+_DEFAULT_BASE_URL = "https://cli.judgmentlabs.ai"
 _APP_NAME = "judgment"
 _APP_AUTHOR = "JudgmentLabs"
 

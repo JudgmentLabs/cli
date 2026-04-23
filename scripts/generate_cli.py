@@ -2,15 +2,15 @@
 """
 Auto-generate Click CLI commands from the Judgment OpenAPI spec.
 
-Usage:
-    python scripts/generate_cli.py [SPEC_URL_OR_FILE]
-
 Reads the OpenAPI spec and produces src/judgment_cli/generated_commands.py
 containing Click command groups for every operation except excluded endpoints.
+
+Run ``python scripts/generate_cli.py --help`` for usage.
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import keyword
 import re
@@ -22,7 +22,7 @@ import httpx
 
 from help_overrides import command_help, option_help
 
-DEFAULT_SPEC = "https://api3.judgmentlabs.ai/openapi/json"
+DEFAULT_SPEC = "https://cli.judgmentlabs.ai/openapi/json"
 EXCLUDED_PATHS = {"/", "/health/", "/judges/upload"}
 
 GROUP_DESCRIPTIONS: dict[str, str] = {
@@ -443,10 +443,20 @@ def generate_all(spec: dict) -> str:
 # Main
 # ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
-    spec_source = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_SPEC
-    print(f"Loading OpenAPI spec from {spec_source} ...", file=sys.stderr)
-    spec = load_spec(spec_source)
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Generate Click CLI commands from the Judgment OpenAPI spec.",
+    )
+    parser.add_argument(
+        "--spec",
+        default=DEFAULT_SPEC,
+        metavar="URL_OR_FILE",
+        help=f"OpenAPI spec URL or local file path (default: {DEFAULT_SPEC}).",
+    )
+    args = parser.parse_args()
+
+    print(f"Loading OpenAPI spec from {args.spec} ...", file=sys.stderr)
+    spec = load_spec(args.spec)
     print(f"Found {len(spec.get('paths', {}))} paths", file=sys.stderr)
 
     code = generate_all(spec)
@@ -455,3 +465,7 @@ if __name__ == "__main__":
     with open(out_path, "w") as f:
         f.write(code)
     print(f"Wrote {out_path}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()

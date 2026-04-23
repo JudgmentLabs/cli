@@ -62,6 +62,21 @@ judgment status   # show resolved sources
 judgment logout   # delete the credentials file
 ```
 
+## Shell completion
+
+Installed automatically when you `brew install` the CLI. For other install methods, eval the completion script from your shell's rc file:
+
+```bash
+# bash (~/.bashrc)
+eval "$(judgment completion bash)"
+
+# zsh (~/.zshrc)
+eval "$(judgment completion zsh)"
+
+# fish (~/.config/fish/config.fish)
+judgment completion fish | source
+```
+
 ## Usage
 
 Run `judgment --help` for the full command list, and `judgment <group> <command> --help` for the flags on a specific command.
@@ -97,11 +112,9 @@ judgment docs read   /docs/getting-started
 
 ## Development
 
-### Regenerating commands
-
 ```bash
-make generate                                                # uses prod
-make generate SPEC_URL=http://localhost:10006/openapi/json   # local dev
+uv sync --extra dev
+uv run python scripts/generate_cli.py
 ```
 
-This rewrites `src/judgment_cli/generated_commands.py` from the OpenAPI spec at `SPEC_URL`.
+`generate_cli.py` rewrites `src/judgment_cli/generated_commands.py` from the OpenAPI spec. Pass `--spec <url-or-file>` to point at a different spec; `--help` for the full usage.

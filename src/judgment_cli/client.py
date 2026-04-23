@@ -74,29 +74,43 @@ class JudgmentClient:
         try:
             r = self._client.request(method, url, **kwargs)
         except httpx.RequestError as exc:
-            click.echo(f"Error: Connection failed - {exc}", err=True)
+            click.echo(f"Error: connection failed ({exc})", err=True)
+            sys.exit(1)
+
+        if r.status_code == 401 or r.status_code == 403:
+            click.echo("Error: authentication failed.", err=True)
             sys.exit(1)
 
         content_type = r.headers.get("content-type", "")
         is_json = "application/json" in content_type
 
         if r.status_code >= 400:
-            if is_json:
-                try:
-                    msg = json.dumps(r.json(), indent=2)
-                except Exception:
-                    msg = r.text
-            else:
-                msg = f"non-JSON {content_type or 'response'} from {r.url}"
-            click.echo(f"Error {r.status_code}: {msg}", err=True)
+            click.echo(f"Error {r.status_code}: {_extract_message(r, is_json)}", err=True)
             sys.exit(1)
 
         if not is_json:
             click.echo(
                 f"Error: unexpected {content_type or 'non-JSON'} response "
-                f"(status {r.status_code}) from {r.url}",
+                f"(status {r.status_code}).",
                 err=True,
             )
             sys.exit(1)
 
         return r.json()
+
+
+def _extract_message(r: httpx.Response, is_json: bool) -> str:
+    """Return a one-line, human-readable error message from a response."""
+    if is_json:
+        try:
+            payload = r.json()
+        except Exception:
+            return r.text.strip() or r.reason_phrase
+        if isinstance(payload, dict):
+            for key in ("message", "error", "detail"):
+                value = payload.get(key)
+                if isinstance(value, str) and value:
+                    return value
+            return json.dumps(payload, separators=(", ", ": "))
+        return json.dumps(payload, separators=(", ", ": "))
+    return r.text.strip() or r.reason_phrase or "request failed"
