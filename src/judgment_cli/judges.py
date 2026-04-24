@@ -12,9 +12,9 @@ spec cannot express on its own:
 * ``init`` — pure local scaffolder that writes a starter judge file. There
   is no server endpoint for this command.
 
-These commands are registered onto the auto-generated ``judges`` group
-through :data:`MANUAL_GROUP_COMMANDS`, which ``main.py`` consumes after
-calling ``register_commands``.
+Commands are attached directly to the auto-generated ``judges_group`` via
+the standard ``@judges_group.command(...)`` decorator — importing this
+module is enough to register them.
 """
 
 from __future__ import annotations
@@ -28,10 +28,11 @@ import click
 
 from judgment_cli import scorer_bundle
 from judgment_cli.client import JudgmentClient
+from judgment_cli.generated_commands import judges_group
 from judgment_cli.ui import error, output, success
 
 
-@click.command("upload")
+@judges_group.command("upload")
 @click.argument("entrypoint_path", type=click.Path(exists=True, dir_okay=False))
 @click.option(
     "-p",
@@ -213,7 +214,7 @@ _TEMPLATES = {
 }
 
 
-@click.command("init")
+@judges_group.command("init")
 @click.option(
     "-t",
     "--response-type",
@@ -285,8 +286,3 @@ def judges_init(
         )
     judge_path.write_text(_TEMPLATES[response_type].format(name=judge_name))
     success(f"Wrote {os.path.abspath(judge_path)}")
-
-
-MANUAL_GROUP_COMMANDS: dict[str, list[click.Command]] = {
-    "judges": [judges_upload, judges_init],
-}

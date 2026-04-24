@@ -338,6 +338,18 @@ def judges_get_settings(ctx, project_id, judge_id):
     _output(result)
 
 
+@judges_group.command("list")
+@click.argument("project_id")
+@click.pass_context
+def judges_list(ctx, project_id):
+    'List judges in a project.\n\n\x08\nList every judge in a project, including prompt, code, and custom (uploaded) judges. Returns each judge with its current configuration and online-evaluation settings.'
+    url = "/judges/list"
+    body = {}
+    body["project_id"] = project_id
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
 @judges_group.command("update-settings")
 @click.argument("project_id")
 @click.argument("judge_id")

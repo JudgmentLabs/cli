@@ -6,7 +6,7 @@ import click
 
 from judgment_cli import __version__
 from judgment_cli.client import JudgmentClient
-from judgment_cli import config, judges
+from judgment_cli import config
 from judgment_cli.generated_commands import register_commands
 from judgment_cli.ui import mask_key
 
@@ -146,25 +146,9 @@ def status() -> None:
 
 register_commands(cli)
 
-
-def _attach_manual_commands(root: click.Group, manual: dict[str, list[click.Command]]) -> None:
-    """Attach hand-written commands to their auto-generated parent groups.
-
-    Raises a clear error if a parent group went missing (e.g. the API spec
-    no longer advertises it), instead of silently dropping the command.
-    """
-    for group_name, commands in manual.items():
-        parent = root.commands.get(group_name)
-        if not isinstance(parent, click.Group):
-            raise RuntimeError(
-                f"Manual commands target group '{group_name}' but it is not "
-                "present in the auto-generated CLI. Did the OpenAPI spec change?"
-            )
-        for command in commands:
-            parent.add_command(command)
-
-
-_attach_manual_commands(cli, judges.MANUAL_GROUP_COMMANDS)
+# Hand-written commands attach themselves to the auto-generated groups when
+# imported (see judgment_cli/judges.py). Importing for side effects only.
+from judgment_cli import judges  # noqa: E402, F401
 
 
 def main() -> None:
