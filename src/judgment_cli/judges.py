@@ -1,9 +1,20 @@
 """Hand-written ``judgment judges`` commands.
 
-The ``judges`` group itself is auto-generated from the OpenAPI spec; the
-commands here (``upload``, ``init``) are attached to that group via
-``attach_to`` because they need behaviour the generator cannot express
-(multipart upload, local file scaffolding).
+The ``judges`` group itself is auto-generated from the OpenAPI spec. The
+commands defined here (``upload``, ``init``) cover behaviour the OpenAPI
+spec cannot express on its own:
+
+* ``upload`` — packages local Python source into a tar+gzip bundle and
+  posts it as multipart form data. The matching server route exists
+  (``judges.upload``) but is intentionally listed in
+  :data:`scripts.generate_cli.MANUAL_COMMANDS` so this implementation owns
+  the slot.
+* ``init`` — pure local scaffolder that writes a starter judge file. There
+  is no server endpoint for this command.
+
+These commands are registered onto the auto-generated ``judges`` group
+through :data:`MANUAL_GROUP_COMMANDS`, which ``main.py`` consumes after
+calling ``register_commands``.
 """
 
 from __future__ import annotations
@@ -276,7 +287,6 @@ def judges_init(
     success(f"Wrote {os.path.abspath(judge_path)}")
 
 
-def attach_to(judges_group: click.Group) -> None:
-    """Attach the hand-written judges commands to the auto-generated group."""
-    judges_group.add_command(judges_upload)
-    judges_group.add_command(judges_init)
+MANUAL_GROUP_COMMANDS: dict[str, list[click.Command]] = {
+    "judges": [judges_upload, judges_init],
+}

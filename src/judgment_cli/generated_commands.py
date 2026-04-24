@@ -17,25 +17,24 @@ from judgment_cli.ui import output as _output
 
 @click.group("automations")
 def automations_group() -> None:
-    """Manage automations."""
-    pass
+    'Manage automations (rules) that fire actions when metrics match conditions.'
 
 
 @automations_group.command("create")
 @click.argument("project_id")
 @click.argument("name")
 @click.option("--description", "description", default=None, help='Human-readable description shown in the UI.')
-@click.option("--conditions", "conditions", required=True, help='JSON array of rule conditions. Each condition references a named metric/scorer on the project and a comparison. Items are ANDed or ORed together based on the COMBINE_TYPE positional argument ("all" vs "any").\n\n\x08\nCondition shape:\n  {\n    "metric": {\n      "scorer_type": "behavior" | "judge" | "prompt" | "custom" | "static" | "span_attribute" | "error",\n      "name": "<scorer or metric name>",\n      "threshold": <number | string | null>?\n    },\n    "comparison": "lt" | "gt" | "eq" | "gte" | "lte" | "fails" | "succeeds" | "chooses" | "detected" | "equals" | "contains" | "exists"\n  }\n\n\x08\nCommon scorer_type values:\n  behavior        Judge-scored behavior (name = behavior name, e.g. "Relevance")\n  static          Built-in metrics like "duration" (ms) or "llm_cost" (USD)\n  prompt/custom   Prompt or custom scorer by name\n  span_attribute  Arbitrary span attribute key (name = attribute key)\n  error           Span error condition\n\nExample: --conditions \'[{"metric":{"scorer_type":"behavior","name":"Relevance","threshold":0.7},"comparison":"gte"}]\'')
-@click.argument("combine_type", type=click.Choice(['all', 'any']))
-@click.option("--actions", "actions", default=None, help='JSON object describing what happens when the automation fires. All top-level keys are optional — include only the actions you want configured.\n\n\x08\nShape:\n  {\n    "notification": {\n      "enabled": <bool>?,\n      "communication_methods": ["email" | "slack" | "pagerduty"],\n      "email_addresses": ["<addr>", ...]?,\n      "pagerduty_config": {"routing_key":"<key>","severity":"critical"|"error"|"warning"|"info"}?\n    }?,\n    "dataset_addition": {\n      "enabled": <bool>?,\n      "dataset_name": "<dataset>",\n      "metadata_fields": <any>?\n    }?,\n    "behavior_evaluation": {\n      "enabled": <bool>?,\n      "behavior_judge_names": ["<judge_name>", ...]\n    }?\n  }\n\nSlack notifications are configured per-organization in the Judgment UI; pass "slack" in communication_methods to use them. Example: --actions \'{"notification":{"communication_methods":["slack"]}}\'')
-@click.option("--cooldown-period", "cooldown_period", default=None, type=float, help='Cooldown duration as a plain number. Paired with --cooldown-period-unit. Example: --cooldown-period 15 --cooldown-period-unit minutes.')
-@click.option("--cooldown-period-unit", "cooldown_period_unit", default=None, type=click.Choice(['seconds', 'minutes', 'hours', 'days']), help='Unit for --cooldown-period: seconds | minutes | hours | days.')
-@click.option("--trigger-frequency-count", "trigger_frequency_count", default=None, type=float, help='Maximum triggers allowed within the window defined by --trigger-frequency-period and --trigger-frequency-period-unit.')
-@click.option("--trigger-frequency-period", "trigger_frequency_period", default=None, type=float, help='Window length for the trigger-frequency limit. Paired with --trigger-frequency-period-unit.')
-@click.option("--trigger-frequency-period-unit", "trigger_frequency_period_unit", default=None, type=click.Choice(['seconds', 'minutes', 'hours', 'days']), help='Unit for --trigger-frequency-period: seconds | minutes | hours | days.')
+@click.option("--conditions", "conditions", required=True, help='JSON array of rule conditions. Each condition references a named metric/scorer on the project and a comparison. Items are ANDed or ORed together based on `combine_type` (`all` vs `any`).\n\n**Condition shape:**\n```\n{\n  "metric": {\n    "scorer_type": "behavior" | "judge" | "prompt" | "custom" | "static" | "span_attribute" | "error",\n    "name": "<scorer or metric name>",\n    "threshold": <number | string | null>?\n  },\n  "comparison": "lt" | "gt" | "eq" | "gte" | "lte" | "fails" | "succeeds" | "chooses" | "detected" | "equals" | "contains" | "exists"\n}\n```\n\n**Common scorer_type values:**\n- `behavior` — Judge-scored behavior (name = behavior name, e.g. "Relevance")\n- `static` — Built-in metrics like "duration" (ms) or "llm_cost" (USD)\n- `prompt`/`custom` — Prompt or custom scorer by name\n- `span_attribute` — Arbitrary span attribute key (name = attribute key)\n- `error` — Span error condition')
+@click.option("--combine-type", "combine_type", required=True, type=click.Choice(['all', 'any']))
+@click.option("--actions", "actions", default=None, help='JSON object describing what happens when the automation fires. All top-level keys are optional — include only the actions you want configured.\n\n**Shape:**\n```\n{\n  "notification": {\n    "enabled": <bool>?,\n    "communication_methods": ["email" | "slack" | "pagerduty"],\n    "email_addresses": ["<addr>", ...]?,\n    "pagerduty_config": {"routing_key":"<key>","severity":"critical"|"error"|"warning"|"info"}?\n  }?,\n  "dataset_addition": {\n    "enabled": <bool>?,\n    "dataset_name": "<dataset>",\n    "metadata_fields": <any>?\n  }?,\n  "behavior_evaluation": {\n    "enabled": <bool>?,\n    "behavior_judge_names": ["<judge_name>", ...]\n  }?\n}\n```\n\nSlack notifications are configured per-organization in the Judgment UI; pass `"slack"` in `communication_methods` to use them.')
+@click.option("--cooldown-period", "cooldown_period", default=None, type=float, help='Cooldown duration as a plain number, paired with `cooldown_period_unit`. Example: 15 with unit `"minutes"`.')
+@click.option("--cooldown-period-unit", "cooldown_period_unit", default=None, type=click.Choice(['seconds', 'minutes', 'hours', 'days']))
+@click.option("--trigger-frequency-count", "trigger_frequency_count", default=None, type=float, help='Maximum triggers allowed within the trigger-frequency window.')
+@click.option("--trigger-frequency-period", "trigger_frequency_period", default=None, type=float, help='Window length for the trigger-frequency limit, paired with `trigger_frequency_period_unit`.')
+@click.option("--trigger-frequency-period-unit", "trigger_frequency_period_unit", default=None, type=click.Choice(['seconds', 'minutes', 'hours', 'days']))
 @click.pass_context
 def automations_create(ctx, project_id, name, description, conditions, combine_type, actions, cooldown_period, cooldown_period_unit, trigger_frequency_count, trigger_frequency_period, trigger_frequency_period_unit):
-    'Create an automation (rule) in a project.\n\n\x08\nAn automation watches behavior/latency/cost metrics on the project and fires actions when its conditions match. Requires the developer role.\n\n\x08\n\x08\nExample: judgment automations create <PROJECT_ID> my-rule any \\\n  --description \'Alert on low relevance scores\' \\\n  --conditions \'[{"metric":{"scorer_type":"behavior","name":"Relevance","threshold":0.7},"comparison":"lt"}]\' \\\n  --actions \'{"notification":{"communication_methods":["slack"]}}\' \\\n  --cooldown-period 5 --cooldown-period-unit minutes'
+    'Create an automation.\n\n\x08\nCreate an automation (rule) in a project. An automation watches behavior/latency/cost metrics and fires actions when its conditions match. Requires the developer role.'
     url = "/automations/create"
     body = {}
     body["project_id"] = project_id
@@ -65,7 +64,7 @@ def automations_create(ctx, project_id, name, description, conditions, combine_t
 @click.argument("rule_id")
 @click.pass_context
 def automations_delete(ctx, project_id, rule_id):
-    'Delete an automation. Requires the admin role.\n\n\x08\n\x08\nExample: judgment automations delete <PROJECT_ID> <RULE_ID>'
+    'Delete an automation.\n\n\x08\nDelete an automation. Requires the admin role.'
     url = "/automations/delete"
     body = {}
     body["project_id"] = project_id
@@ -79,7 +78,7 @@ def automations_delete(ctx, project_id, rule_id):
 @click.argument("rule_id")
 @click.pass_context
 def automations_get(ctx, project_id, rule_id):
-    'Fetch the full definition of a single automation by ID.\n\n\x08\n\x08\nExample: judgment automations get <PROJECT_ID> <RULE_ID>'
+    """Get an automation by ID."""
     url = "/automations/detail"
     body = {}
     body["project_id"] = project_id
@@ -105,15 +104,15 @@ def automations_list(ctx, project_id):
 @click.argument("rule_id")
 @click.option("--name", "name", default=None, help='New name for the automation.')
 @click.option("--description", "description", default=None, help='New description for the automation.')
-@click.option("--conditions", "conditions", default=None, help='JSON array of rule conditions. Each condition references a named metric/scorer on the project and a comparison. Items are ANDed or ORed together based on the COMBINE_TYPE positional argument ("all" vs "any").\n\n\x08\nCondition shape:\n  {\n    "metric": {\n      "scorer_type": "behavior" | "judge" | "prompt" | "custom" | "static" | "span_attribute" | "error",\n      "name": "<scorer or metric name>",\n      "threshold": <number | string | null>?\n    },\n    "comparison": "lt" | "gt" | "eq" | "gte" | "lte" | "fails" | "succeeds" | "chooses" | "detected" | "equals" | "contains" | "exists"\n  }\n\n\x08\nCommon scorer_type values:\n  behavior        Judge-scored behavior (name = behavior name, e.g. "Relevance")\n  static          Built-in metrics like "duration" (ms) or "llm_cost" (USD)\n  prompt/custom   Prompt or custom scorer by name\n  span_attribute  Arbitrary span attribute key (name = attribute key)\n  error           Span error condition\n\nExample: --conditions \'[{"metric":{"scorer_type":"behavior","name":"Relevance","threshold":0.7},"comparison":"gte"}]\'')
+@click.option("--conditions", "conditions", default=None, help='JSON array of rule conditions. Each condition references a named metric/scorer on the project and a comparison. Items are ANDed or ORed together based on `combine_type` (`all` vs `any`).\n\n**Condition shape:**\n```\n{\n  "metric": {\n    "scorer_type": "behavior" | "judge" | "prompt" | "custom" | "static" | "span_attribute" | "error",\n    "name": "<scorer or metric name>",\n    "threshold": <number | string | null>?\n  },\n  "comparison": "lt" | "gt" | "eq" | "gte" | "lte" | "fails" | "succeeds" | "chooses" | "detected" | "equals" | "contains" | "exists"\n}\n```\n\n**Common scorer_type values:**\n- `behavior` — Judge-scored behavior (name = behavior name, e.g. "Relevance")\n- `static` — Built-in metrics like "duration" (ms) or "llm_cost" (USD)\n- `prompt`/`custom` — Prompt or custom scorer by name\n- `span_attribute` — Arbitrary span attribute key (name = attribute key)\n- `error` — Span error condition')
 @click.option("--combine-type", "combine_type", default=None, type=click.Choice(['all', 'any']))
-@click.option("--actions", "actions", default=None, help='JSON object describing what happens when the automation fires. All top-level keys are optional — include only the actions you want configured.\n\n\x08\nShape:\n  {\n    "notification": {\n      "enabled": <bool>?,\n      "communication_methods": ["email" | "slack" | "pagerduty"],\n      "email_addresses": ["<addr>", ...]?,\n      "pagerduty_config": {"routing_key":"<key>","severity":"critical"|"error"|"warning"|"info"}?\n    }?,\n    "dataset_addition": {\n      "enabled": <bool>?,\n      "dataset_name": "<dataset>",\n      "metadata_fields": <any>?\n    }?,\n    "behavior_evaluation": {\n      "enabled": <bool>?,\n      "behavior_judge_names": ["<judge_name>", ...]\n    }?\n  }\n\nSlack notifications are configured per-organization in the Judgment UI; pass "slack" in communication_methods to use them. Example: --actions \'{"notification":{"communication_methods":["slack"]}}\'')
+@click.option("--actions", "actions", default=None, help='JSON object describing what happens when the automation fires. All top-level keys are optional — include only the actions you want configured.\n\n**Shape:**\n```\n{\n  "notification": {\n    "enabled": <bool>?,\n    "communication_methods": ["email" | "slack" | "pagerduty"],\n    "email_addresses": ["<addr>", ...]?,\n    "pagerduty_config": {"routing_key":"<key>","severity":"critical"|"error"|"warning"|"info"}?\n  }?,\n  "dataset_addition": {\n    "enabled": <bool>?,\n    "dataset_name": "<dataset>",\n    "metadata_fields": <any>?\n  }?,\n  "behavior_evaluation": {\n    "enabled": <bool>?,\n    "behavior_judge_names": ["<judge_name>", ...]\n  }?\n}\n```\n\nSlack notifications are configured per-organization in the Judgment UI; pass `"slack"` in `communication_methods` to use them.')
 @click.option("--active", "active", default=None, type=bool, help='Enable (true) or disable (false) the automation without modifying other fields.')
-@click.option("--cooldown-period", "cooldown_period", default=None, help='JSON 2-tuple [period, unit] describing the minimum wait between triggers. Pass null to clear the cooldown.\n\n\x08\nShape: [<period:number>, <unit:"seconds"|"minutes"|"hours"|"days">]\n\nExample: --cooldown-period \'[15, "minutes"]\'  (at least 15 min between triggers)')
-@click.option("--trigger-frequency", "trigger_frequency", default=None, help='JSON 3-tuple [count, period, unit] describing the rate-limit window. Pass null to disable frequency limiting.\n\n\x08\nShape: [<max_trigger_count:number>, <period:number>, <unit:"seconds"|"minutes"|"hours"|"days">]\n\nExample: --trigger-frequency \'[5, 1, "hours"]\'  (max 5 triggers per 1 hour)')
+@click.option("--cooldown-period", "cooldown_period", default=None, help='JSON 2-tuple `[period, unit]` describing the minimum wait between triggers. Pass null to clear the cooldown.\n\n**Shape:** `[<period:number>, <unit:"seconds"|"minutes"|"hours"|"days">]`\n\nExample: `[15, "minutes"]` (at least 15 min between triggers)')
+@click.option("--trigger-frequency", "trigger_frequency", default=None, help='JSON 3-tuple `[count, period, unit]` describing the rate-limit window. Pass null to disable frequency limiting.\n\n**Shape:** `[<max_trigger_count:number>, <period:number>, <unit:"seconds"|"minutes"|"hours"|"days">]`\n\nExample: `[5, 1, "hours"]` (max 5 triggers per 1 hour)')
 @click.pass_context
 def automations_update(ctx, project_id, rule_id, name, description, conditions, combine_type, actions, active, cooldown_period, trigger_frequency):
-    'Update an existing automation. All fields other than the positional arguments are optional — only supplied flags are applied.\n\n\x08\nUse --active true/false to enable or disable without changing other fields. Requires the developer role.\n\n\x08\n\x08\nExample: judgment automations update <PROJECT_ID> <RULE_ID> --active false'
+    'Update an automation.\n\n\x08\nUpdate an existing automation. All fields other than the IDs are optional — only supplied fields are applied. Use `active: true/false` to enable or disable without changing other fields. Requires the developer role.'
     url = "/automations/update"
     body = {}
     body["project_id"] = project_id
@@ -137,6 +136,7 @@ def automations_update(ctx, project_id, rule_id, name, description, conditions, 
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
+
 # ────────────────────────────────────────────────────────────────────
 # Group: behaviors
 # ────────────────────────────────────────────────────────────────────
@@ -144,8 +144,7 @@ def automations_update(ctx, project_id, rule_id, name, description, conditions, 
 
 @click.group("behaviors")
 def behaviors_group() -> None:
-    """View and manage behaviors."""
-    pass
+    'View and manage behaviors (the binary or categorical labels judges assign).'
 
 
 @behaviors_group.command("create-binary")
@@ -154,12 +153,12 @@ def behaviors_group() -> None:
 @click.argument("prompt")
 @click.option("--description", "description", default=None, help='Human-readable description shown in the UI.')
 @click.option("--model", "model", default=None, help='LLM model ID used by the judge prompt. Defaults to "gpt-5.2" when omitted.')
-@click.option("--category-ids", "category_ids", multiple=True, help='UUID of a category to attach the behavior to. Repeat the flag to attach multiple categories: --category-ids <uuid1> --category-ids <uuid2>.')
-@click.option("--advanced-settings", "advanced_settings", default=None, help='JSON object overriding the judge\'s online-evaluation configuration. All four fields are required when this flag is supplied.\n\n\x08\nShape:\n  {\n    "online_evaluation_mode": "continuous" | "on_demand",\n    "online_sampling_rate": <number 0-100>,\n    "online_span_triggers": [\n      {"field":"span_name"|"span_attribute","operator":"contains"|"equals"|"exists","value":"<string>","key":"<attr-key>"?}\n    ],\n    "online_session_scoring": <bool>\n  }\n\n"continuous" runs the judge automatically on qualifying spans; "on_demand" requires a manual `judgment traces evaluate` call. online_sampling_rate is a percent of matching spans to score.\n\nExample: --advanced-settings \'{"online_evaluation_mode":"continuous","online_sampling_rate":10,"online_span_triggers":[],"online_session_scoring":false}\'')
-@click.option("--judge-id", "judge_id", default=None, help='Attach the new behavior to an existing judge instead of creating one. The judge must be score_type=binary and have no existing behaviors.')
+@click.option("--category-ids", "category_ids", multiple=True, help='UUIDs of categories to attach the behavior to. Pass an array of category UUIDs.')
+@click.option("--advanced-settings", "advanced_settings", default=None, help='JSON object overriding the judge\'s online-evaluation configuration. All four fields are required when this is supplied.\n\n**Shape:**\n```\n{\n  "online_evaluation_mode": "continuous" | "on_demand",\n  "online_sampling_rate": <number 0-100>,\n  "online_span_triggers": [\n    {"field":"span_name"|"span_attribute","operator":"contains"|"equals"|"exists","value":"<string>","key":"<attr-key>"?}\n  ],\n  "online_session_scoring": <bool>\n}\n```\n\n`continuous` runs the judge automatically on qualifying spans; `on_demand` requires a manual `judgment traces evaluate` call. `online_sampling_rate` is a percent (0–100) of matching spans to score.')
+@click.option("--judge-id", "judge_id", default=None, help='Attach the new behavior to an existing judge instead of creating one. The judge must be `score_type=binary` and have no existing behaviors.')
 @click.pass_context
 def behaviors_create_binary(ctx, project_id, name, prompt, description, model, category_ids, advanced_settings, judge_id):
-    'Create a binary (Yes/No) behavior backed by a prompt judge.\n\n\x08\nScores each trace/span as "Yes" (true) or "No" (false) using the prompt you supply. Pass --judge-id to attach to an existing judge instead of creating a new prompt scorer. Requires the developer role.\n\n\x08\n\x08\nExample: judgment behaviors create-binary <PROJECT_ID> \'Relevance\' \\\n  \'Was the assistant response relevant to the user message?\' \\\n  --description \'Binary relevance check\' --model gpt-5.2'
+    'Create a binary (yes/no) behavior.\n\n\x08\nCreate a binary behavior. The judge LLM uses your prompt to decide true/false on each qualifying span.'
     url = "/behaviors/create-binary"
     body = {}
     body["project_id"] = project_id
@@ -183,14 +182,14 @@ def behaviors_create_binary(ctx, project_id, name, prompt, description, model, c
 @click.argument("project_id")
 @click.argument("name")
 @click.argument("prompt")
-@click.option("--options", "options", required=True, help='JSON array of the allowed output categories the classifier judge can return. Must contain at least one option.\n\n\x08\nShape:\n  [\n    {"name":"<label>", "description":"<optional human description>", "category_ids":["<uuid>", ...]},\n    ...\n  ]\n\nExample: --options \'[{"name":"Good","description":"helpful response"},{"name":"Bad","description":"unhelpful or incorrect"}]\'')
+@click.option("--options", "options", required=True, help='JSON array of the allowed output categories the classifier judge can return. Must contain at least one option.\n\n**Shape:**\n```\n[\n  {"name":"<label>", "description":"<optional human description>", "category_ids":["<uuid>", ...]},\n  ...\n]\n```')
 @click.option("--model", "model", default=None, help='LLM model ID used by the judge prompt. Defaults to "gpt-5.2" when omitted.')
-@click.option("--category-ids", "category_ids", multiple=True, help='UUID of a category to attach the behavior to. Repeat the flag to attach multiple categories: --category-ids <uuid1> --category-ids <uuid2>.')
-@click.option("--advanced-settings", "advanced_settings", default=None, help='JSON object overriding the judge\'s online-evaluation configuration. All four fields are required when this flag is supplied.\n\n\x08\nShape:\n  {\n    "online_evaluation_mode": "continuous" | "on_demand",\n    "online_sampling_rate": <number 0-100>,\n    "online_span_triggers": [\n      {"field":"span_name"|"span_attribute","operator":"contains"|"equals"|"exists","value":"<string>","key":"<attr-key>"?}\n    ],\n    "online_session_scoring": <bool>\n  }\n\n"continuous" runs the judge automatically on qualifying spans; "on_demand" requires a manual `judgment traces evaluate` call. online_sampling_rate is a percent of matching spans to score.\n\nExample: --advanced-settings \'{"online_evaluation_mode":"continuous","online_sampling_rate":10,"online_span_triggers":[],"online_session_scoring":false}\'')
-@click.option("--judge-id", "judge_id", default=None, help='Attach the new behavior to an existing judge instead of creating one. The judge must be score_type=categorical and have no existing behaviors.')
+@click.option("--category-ids", "category_ids", multiple=True, help='UUIDs of categories to attach the behavior to. Pass an array of category UUIDs.')
+@click.option("--advanced-settings", "advanced_settings", default=None, help='JSON object overriding the judge\'s online-evaluation configuration. All four fields are required when this is supplied.\n\n**Shape:**\n```\n{\n  "online_evaluation_mode": "continuous" | "on_demand",\n  "online_sampling_rate": <number 0-100>,\n  "online_span_triggers": [\n    {"field":"span_name"|"span_attribute","operator":"contains"|"equals"|"exists","value":"<string>","key":"<attr-key>"?}\n  ],\n  "online_session_scoring": <bool>\n}\n```\n\n`continuous` runs the judge automatically on qualifying spans; `on_demand` requires a manual `judgment traces evaluate` call. `online_sampling_rate` is a percent (0–100) of matching spans to score.')
+@click.option("--judge-id", "judge_id", default=None, help='Attach the new behavior to an existing judge instead of creating one. The judge must be `score_type=categorical` and have no existing behaviors.')
 @click.pass_context
 def behaviors_create_classifier(ctx, project_id, name, prompt, options, model, category_ids, advanced_settings, judge_id):
-    'Create a categorical (multi-class) behavior backed by a prompt judge.\n\n\x08\nScores each trace/span into one of the --options categories. Pass --judge-id to attach to an existing classifier judge instead of creating a new one. Requires the developer role.\n\n\x08\n\x08\nExample: judgment behaviors create-classifier <PROJECT_ID> \'Sentiment\' \\\n  \'Classify the assistant response tone.\' \\\n  --options \'[{"name":"Positive"},{"name":"Neutral"},{"name":"Negative"}]\''
+    'Create a classifier (multi-label) behavior.\n\n\x08\nCreate a classifier behavior. The judge LLM picks one of the supplied options for each qualifying span.'
     url = "/behaviors/create-classifier"
     body = {}
     body["project_id"] = project_id
@@ -213,10 +212,10 @@ def behaviors_create_classifier(ctx, project_id, name, prompt, options, model, c
 @click.argument("project_id")
 @click.argument("behavior_id")
 @click.option("--delete-scorer", "delete_scorer", default=None, type=bool, help='When true, also delete the underlying prompt scorer if no other behaviors reference it.')
-@click.option("--delete-all-values", "delete_all_values", default=None, type=bool, help='For classifier behaviors, when true deletes every category row for this judge (not just the provided BEHAVIOR_ID). Ignored for binary behaviors (those always delete both rows).')
+@click.option("--delete-all-values", "delete_all_values", default=None, type=bool, help='For classifier behaviors, when true deletes every category row for this judge (not just the provided behavior_id). Ignored for binary behaviors.')
 @click.pass_context
 def behaviors_delete(ctx, project_id, behavior_id, delete_scorer, delete_all_values):
-    'Delete a behavior. Requires the admin role.\n\n\x08\nBinary behaviors always delete both the true and false rows. For classifier behaviors, pass --delete-all-values true to delete every category row for the judge at once. Pass --delete-scorer true to also delete the underlying prompt scorer when no other behaviors reference it.\n\n\x08\n\x08\nExample: judgment behaviors delete <PROJECT_ID> <BEHAVIOR_ID> --delete-scorer true'
+    """Delete a behavior."""
     url = "/behaviors/delete"
     body = {}
     body["project_id"] = project_id
@@ -232,11 +231,11 @@ def behaviors_delete(ctx, project_id, behavior_id, delete_scorer, delete_all_val
 @behaviors_group.command("get")
 @click.argument("project_id")
 @click.argument("behavior_id")
-@click.option("--start-date", "start_date", default=None)
-@click.option("--end-date", "end_date", default=None)
+@click.option("--start-date", "start_date", default=None, help='Optional ISO 8601 start date for stats.')
+@click.option("--end-date", "end_date", default=None, help='Optional ISO 8601 end date for stats.')
 @click.pass_context
 def behaviors_get(ctx, project_id, behavior_id, start_date, end_date):
-    """Get behavior detail."""
+    """Get a behavior with judge details and stats."""
     url = "/behaviors/detail"
     body = {}
     body["project_id"] = project_id
@@ -253,7 +252,7 @@ def behaviors_get(ctx, project_id, behavior_id, start_date, end_date):
 @click.argument("project_id")
 @click.pass_context
 def behaviors_list(ctx, project_id):
-    """List behaviors."""
+    'List behaviors.\n\n\x08\nList every behavior in a project along with rolled-up trace counts and last-seen stats.'
     url = "/behaviors/list"
     body = {}
     body["project_id"] = project_id
@@ -267,7 +266,7 @@ def behaviors_list(ctx, project_id):
 @click.option("--description", "description", default=None, help='New human-readable description for the behavior.')
 @click.pass_context
 def behaviors_update(ctx, project_id, behavior_id, description):
-    "Update a behavior's description. Requires the developer role.\n\n\x08\n\x08\nExample: judgment behaviors update <PROJECT_ID> <BEHAVIOR_ID> --description 'New description'"
+    """Update a behavior’s description."""
     url = "/behaviors/update"
     body = {}
     body["project_id"] = project_id
@@ -277,6 +276,7 @@ def behaviors_update(ctx, project_id, behavior_id, description):
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
+
 # ────────────────────────────────────────────────────────────────────
 # Group: docs
 # ────────────────────────────────────────────────────────────────────
@@ -284,15 +284,14 @@ def behaviors_update(ctx, project_id, behavior_id, description):
 
 @click.group("docs")
 def docs_group() -> None:
-    """Search and read docs."""
-    pass
+    'Search and read Judgment documentation.'
 
 
-@docs_group.command("read")
+@docs_group.command("get-page")
 @click.argument("path")
 @click.pass_context
-def docs_read(ctx, path):
-    """Read doc page."""
+def docs_get_page(ctx, path):
+    'Read a documentation page.\n\n\x08\nFetch the rendered text of a documentation page by its path. Use `docs.search` first to find candidate paths.'
     url = "/docs/page"
     params = {}
     params["path"] = path
@@ -302,10 +301,10 @@ def docs_read(ctx, path):
 
 @docs_group.command("search")
 @click.argument("query")
-@click.option("--match-count", "match_count", default=None, type=float)
+@click.option("--match-count", "match_count", default=None, type=float, help='Maximum results to return (1–20). Defaults to 8 when omitted.')
 @click.pass_context
 def docs_search(ctx, query, match_count):
-    """Search docs."""
+    'Search docs.\n\n\x08\nHybrid (vector + lexical) search over the public Judgment documentation. Returns the top matching headings with full URLs.'
     url = "/docs/search"
     body = {}
     body["query"] = query
@@ -314,6 +313,7 @@ def docs_search(ctx, query, match_count):
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
+
 # ────────────────────────────────────────────────────────────────────
 # Group: judges
 # ────────────────────────────────────────────────────────────────────
@@ -321,16 +321,15 @@ def docs_search(ctx, query, match_count):
 
 @click.group("judges")
 def judges_group() -> None:
-    """Manage judges (scorers)."""
-    pass
+    'View and manage judges and their online-evaluation settings.'
 
 
-@judges_group.command("settings")
+@judges_group.command("get-settings")
 @click.argument("project_id")
 @click.argument("judge_id")
 @click.pass_context
-def judges_settings(ctx, project_id, judge_id):
-    """Get judge settings."""
+def judges_get_settings(ctx, project_id, judge_id):
+    """Get a judge’s online-evaluation settings."""
     url = "/judges/settings"
     body = {}
     body["project_id"] = project_id
@@ -342,13 +341,13 @@ def judges_settings(ctx, project_id, judge_id):
 @judges_group.command("update-settings")
 @click.argument("project_id")
 @click.argument("judge_id")
-@click.argument("evaluation_mode", type=click.Choice(['continuous', 'on_demand']))
-@click.argument("sampling_rate", type=float)
-@click.option("--span-triggers", "span_triggers", default=None, help='JSON array of span filters that restrict which spans the judge evaluates. Pass [] to evaluate all spans.\n\n\x08\nShape:\n  [\n    {\n      "field": "span_name" | "span_attribute",\n      "operator": "contains" | "equals" | "exists",\n      "value": "<string>",\n      "key": "<attribute key>"?\n    },\n    ...\n  ]\n\nUse "field":"span_name" to match on span names; "field":"span_attribute" with "key":"<attr>" to match on a span attribute\'s value. Triggers are ANDed together — a span must match every entry to be evaluated.\n\nExample: --span-triggers \'[{"field":"span_name","operator":"equals","value":"agent.run"}]\'')
+@click.option("--evaluation-mode", "evaluation_mode", required=True, type=click.Choice(['continuous', 'on_demand']))
+@click.option("--sampling-rate", "sampling_rate", required=True, type=float, help='Percent (0–100) of qualifying spans to score.')
+@click.option("--span-triggers", "span_triggers", default=None, help='JSON array of span filters that restrict which spans the judge evaluates. Pass `[]` to evaluate all spans.\n\n**Shape:**\n```\n[\n  {\n    "field": "span_name" | "span_attribute",\n    "operator": "contains" | "equals" | "exists",\n    "value": "<string>",\n    "key": "<attribute key>"?\n  },\n  ...\n]\n```\n\nUse `field: "span_name"` to match on span names; `field: "span_attribute"` with `key: "<attr>"` to match on a span attribute\'s value. Triggers are ANDed together — a span must match every entry to be evaluated.')
 @click.option("--session-scoring", "session_scoring", default=None, type=bool, help='When true, run the judge at session granularity instead of per-span.')
 @click.pass_context
 def judges_update_settings(ctx, project_id, judge_id, evaluation_mode, sampling_rate, span_triggers, session_scoring):
-    'Update a judge\'s online-evaluation configuration.\n\n\x08\nApplies to all behaviors backed by the judge. EVALUATION_MODE selects whether the judge runs continuously on every matching span ("continuous") or only when explicitly invoked ("on_demand"); SAMPLING_RATE is a percentage (0-100) of qualifying spans to score. Requires the developer role.\n\n\x08\n\x08\nExample: judgment judges update-settings <PROJECT_ID> <JUDGE_ID> continuous 10 \\\n  --span-triggers \'[{"field":"span_name","operator":"equals","value":"agent.run"}]\''
+    'Update a judge’s online-evaluation settings.\n\n\x08\nUpdate how often and on which spans a judge runs online. Pass `evaluation_mode: continuous` with a sampling rate to evaluate automatically, or `on_demand` to require manual `judgment traces evaluate` calls.'
     url = "/judges/update-settings"
     body = {}
     body["project_id"] = project_id
@@ -362,6 +361,7 @@ def judges_update_settings(ctx, project_id, judge_id, evaluation_mode, sampling_
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
+
 # ────────────────────────────────────────────────────────────────────
 # Group: projects
 # ────────────────────────────────────────────────────────────────────
@@ -369,15 +369,14 @@ def judges_update_settings(ctx, project_id, judge_id, evaluation_mode, sampling_
 
 @click.group("projects")
 def projects_group() -> None:
-    """Manage projects."""
-    pass
+    'Manage projects in your organization.'
 
 
 @projects_group.command("add-favorite")
 @click.argument("project_id")
 @click.pass_context
 def projects_add_favorite(ctx, project_id):
-    'Mark a project as a favorite for your user so it appears pinned in the UI.\n\n\x08\n\x08\nExample: judgment projects add-favorite <PROJECT_ID>'
+    'Add project to favorites.\n\n\x08\nMark a project as a favorite for your user so it appears pinned in the UI.'
     url = "/projects/add-favorite"
     body = {}
     body["project_id"] = project_id
@@ -389,7 +388,7 @@ def projects_add_favorite(ctx, project_id):
 @click.argument("project_name")
 @click.pass_context
 def projects_create(ctx, project_name):
-    'Create a new project in your organization. Requires the developer role.\n\n\x08\n\x08\nExample: judgment projects create my-new-project'
+    'Create project.\n\n\x08\nCreate a new project in your organization. Requires the developer role.'
     url = "/projects/create"
     body = {}
     body["project_name"] = project_name
@@ -400,7 +399,7 @@ def projects_create(ctx, project_name):
 @projects_group.command("list")
 @click.pass_context
 def projects_list(ctx):
-    """List projects."""
+    'List projects.\n\n\x08\nList every project in your organization that you have access to.'
     url = "/projects"
     result = ctx.obj["client"].request("GET", url)
     _output(result)
@@ -410,12 +409,13 @@ def projects_list(ctx):
 @click.argument("project_id")
 @click.pass_context
 def projects_remove_favorite(ctx, project_id):
-    "Remove a project from your user's favorites.\n\n\x08\n\x08\nExample: judgment projects remove-favorite <PROJECT_ID>"
+    "Remove project from favorites.\n\n\x08\nRemove a project from your user's favorites."
     url = "/projects/remove-favorite"
     body = {}
     body["project_id"] = project_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
+
 
 # ────────────────────────────────────────────────────────────────────
 # Group: sessions
@@ -424,8 +424,7 @@ def projects_remove_favorite(ctx, project_id):
 
 @click.group("sessions")
 def sessions_group() -> None:
-    """View and manage sessions."""
-    pass
+    'Search and inspect sessions in a project.'
 
 
 @sessions_group.command("get")
@@ -444,13 +443,13 @@ def sessions_get(ctx, project_id, session_id):
 
 @sessions_group.command("search")
 @click.argument("project_id")
-@click.option("--filters", "filters", default=None, help='Filter expressions, ANDed together. Each item is {"field":<field>,"op":<op>,"value":<value>}. Allowed ops depend on the field\'s type.\n\n\x08\nOp groups:\n  STRING_OPS  = "=" | "!=" | "contains" | "does_not_contain"\n  NUMERIC_OPS = "=" | "!=" | "<" | "<=" | ">" | ">="\n  ARRAY_ANY   = "any"   (matches when the row\'s array overlaps the supplied values)\n\nString fields (op in STRING_OPS, value is a string): session_id.\n\nNumeric fields (op in NUMERIC_OPS, value is a number): trace_count, latency (nanoseconds), total_cost (USD).\n\nArray fields (op = "any", value is an array): behaviors (behavior UUIDs).\n\nExample: --filters \'[{"field":"trace_count","op":">=","value":5}]\'\n')
-@click.option("--time-range", "time_range", default=None, help='{"start_time":<iso8601-string>|null,"end_time":<iso8601-string>|null}. Either bound may be null to leave that side open. Invalid timestamps return 400.')
-@click.option("--pagination", "pagination", required=True, help='{"limit":<int 1-200>,"cursorSortValue":<string>|null,"cursorItemId":<string>|null}.\n\nFirst page: pass null for both cursor fields. Each response returns nextCursor:{sort_value,session_id} (or null when hasMore=false); copy those into cursorSortValue and cursorItemId for the next page.')
-@click.option("--sort-by", "sort_by", default=None, help='{"field":<sort_field>,"direction":"asc"|"desc"} where sort_field is one of: created_at, num_traces, latency, llm_cost. Default when omitted: {"field":"created_at","direction":"desc"}.')
+@click.option("--filters", "filters", default=None, help='Filter expressions, ANDed together. Each item is `{"field":<field>,"op":<op>,"value":<value>}`. Allowed ops depend on the field\'s type.\n\n**Op groups:**\n- `STRING_OPS` = `=` | `!=` | `contains` | `does_not_contain`\n- `NUMERIC_OPS` = `=` | `!=` | `<` | `<=` | `>` | `>=`\n- `ARRAY_ANY` = `any` (matches when the row\'s array overlaps the supplied values)\n\n**String fields** (op in STRING_OPS, value is a string): `session_id`.\n\n**Numeric fields** (op in NUMERIC_OPS, value is a number): `trace_count`, `latency` (nanoseconds), `total_cost` (USD).\n\n**Array fields** (op = `any`, value is an array): `behaviors` (behavior UUIDs).')
+@click.option("--time-range", "time_range", default=None, help='`{"start_time":<iso8601-string>|null,"end_time":<iso8601-string>|null}`. Either bound may be null to leave that side open. Invalid timestamps return 400.')
+@click.option("--pagination", "pagination", required=True, help='`{"limit":<int 1-200>,"cursorSortValue":<string>|null,"cursorItemId":<string>|null}`.\n\nFirst page: pass null for both cursor fields. Each response returns `nextCursor:{sort_value,session_id}` (or null when `hasMore=false`); copy those into `cursorSortValue` and `cursorItemId` for the next page.')
+@click.option("--sort-by", "sort_by", default=None, help='`{"field":<sort_field>,"direction":"asc"|"desc"}` where `sort_field` is one of: `created_at`, `num_traces`, `latency`, `llm_cost`. Default when omitted: `{"field":"created_at","direction":"desc"}`.')
 @click.pass_context
 def sessions_search(ctx, project_id, filters, time_range, pagination, sort_by):
-    'Search sessions in a project.\n\n\x08\nFiltering, sorting, time bounds, and pagination are passed as JSON via the body fields below — see each flag\'s description for its full reference.\n\n\x08\n\x08\nExample: judgment sessions search <PROJECT_ID> \\\n  --filters \'[{"field":"trace_count","op":">=","value":5}]\' \\\n  --sort-by \'{"field":"latency","direction":"desc"}\' \\\n  --pagination \'{"limit":25,"cursorSortValue":null,"cursorItemId":null}\''
+    'Search sessions.\n\n\x08\nFilter, sort, time-bound, and paginate sessions in a project.'
     url = "/sessions/search"
     body = {}
     body["project_id"] = project_id
@@ -470,7 +469,7 @@ def sessions_search(ctx, project_id, filters, time_range, pagination, sort_by):
 @click.argument("session_id")
 @click.pass_context
 def sessions_trace_behaviors(ctx, project_id, session_id):
-    """Get session trace behaviors."""
+    """List behaviors observed across a session’s traces."""
     url = "/sessions/trace-behaviors"
     body = {}
     body["project_id"] = project_id
@@ -484,13 +483,14 @@ def sessions_trace_behaviors(ctx, project_id, session_id):
 @click.argument("session_id")
 @click.pass_context
 def sessions_trace_ids(ctx, project_id, session_id):
-    """Get session trace IDs."""
+    """List trace IDs in a session."""
     url = "/sessions/trace-ids"
     body = {}
     body["project_id"] = project_id
     body["session_id"] = session_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
+
 
 # ────────────────────────────────────────────────────────────────────
 # Group: traces
@@ -499,17 +499,16 @@ def sessions_trace_ids(ctx, project_id, session_id):
 
 @click.group("traces")
 def traces_group() -> None:
-    """View and manage traces."""
-    pass
+    'Search, inspect, tag, and re-evaluate traces in a project.'
 
 
 @traces_group.command("add-tags")
 @click.argument("project_id")
 @click.argument("trace_id")
-@click.option("--tags", "tags", multiple=True, help='Tag string to attach to the trace. Repeat --tags to attach multiple tags: --tags a --tags b.')
+@click.option("--tags", "tags", multiple=True, required=True, help='String tags to attach to the trace. Tags are additive — existing tags on the trace are preserved.')
 @click.pass_context
 def traces_add_tags(ctx, project_id, trace_id, tags):
-    'Attach one or more string tags to an existing trace.\n\n\x08\nTags are additive — existing tags on the trace are preserved. Repeat --tags to add multiple tags.\n\n\x08\n\x08\nExample: judgment traces add-tags <PROJECT_ID> <TRACE_ID> \\\n  --tags regression --tags investigate'
+    'Add tags to a trace.\n\n\x08\nAttach one or more string tags to an existing trace. Tags are additive — existing tags are preserved.'
     url = "/traces/add-tags"
     body = {}
     body["project_id"] = project_id
@@ -525,7 +524,7 @@ def traces_add_tags(ctx, project_id, trace_id, tags):
 @click.argument("trace_id")
 @click.pass_context
 def traces_behaviors(ctx, project_id, trace_id):
-    """Get trace behaviors."""
+    """List behaviors observed on a trace."""
     url = "/traces/behaviors"
     body = {}
     body["project_id"] = project_id
@@ -536,12 +535,12 @@ def traces_behaviors(ctx, project_id, trace_id):
 
 @traces_group.command("evaluate")
 @click.argument("project_id")
-@click.option("--evaluate-all", "evaluate_all", default=None, type=bool, help='When true, re-evaluate every trace in the project. Mutually exclusive with --trace-ids.')
-@click.option("--trace-ids", "trace_ids", multiple=True, help='Trace UUID to re-evaluate. Repeat --trace-ids to evaluate multiple: --trace-ids <id1> --trace-ids <id2>.')
-@click.option("--specific-judge-names", "specific_judge_names", multiple=True, help='Restrict evaluation to judges with these names. Repeat the flag to pass multiple. Omit to run every applicable judge.')
+@click.option("--evaluate-all", "evaluate_all", default=None, type=bool, help='When true, re-evaluate every trace in the project. Mutually exclusive with `trace_ids`.')
+@click.option("--trace-ids", "trace_ids", multiple=True, help='Trace UUIDs to re-evaluate. Mutually exclusive with `evaluate_all`.')
+@click.option("--specific-judge-names", "specific_judge_names", multiple=True, help='Restrict evaluation to judges with these names. Omit to run every applicable judge.')
 @click.pass_context
 def traces_evaluate(ctx, project_id, evaluate_all, trace_ids, specific_judge_names):
-    "Queue traces for re-evaluation by the project's judges.\n\n\x08\nPass specific trace IDs with --trace-ids (repeat the flag) or use --evaluate-all true to re-evaluate every trace in the project. Use --specific-judge-names to restrict which judges run (repeat the flag). Requires the developer role.\n\n\x08\n\x08\nExample: judgment traces evaluate <PROJECT_ID> \\\n  --trace-ids <TRACE_ID_1> --trace-ids <TRACE_ID_2> \\\n  --specific-judge-names Relevance"
+    'Re-evaluate traces.\n\n\x08\nQueue traces for re-evaluation by the project’s judges. Pass `trace_ids` to re-evaluate specific traces, or `evaluate_all: true` to re-evaluate every trace in the project.'
     url = "/traces/evaluate"
     body = {}
     body["project_id"] = project_id
@@ -560,7 +559,7 @@ def traces_evaluate(ctx, project_id, evaluate_all, trace_ids, specific_judge_nam
 @click.argument("trace_id")
 @click.pass_context
 def traces_get(ctx, project_id, trace_id):
-    """Get trace detail."""
+    """Get a trace by ID."""
     url = "/traces/detail"
     body = {}
     body["project_id"] = project_id
@@ -571,13 +570,13 @@ def traces_get(ctx, project_id, trace_id):
 
 @traces_group.command("search")
 @click.argument("project_id")
-@click.option("--filters", "filters", default=None, help='Filter expressions, ANDed together. Each item is {"field":<field>,"op":<op>,"value":<value>}. Allowed ops depend on the field\'s type.\n\n\x08\nOp groups:\n  STRING_OPS  = "=" | "!=" | "contains" | "does_not_contain" | "exists" | "is_absent"\n  NUMERIC_OPS = "=" | "!=" | "<" | "<=" | ">" | ">="\n  ARRAY_ANY   = "any"   (matches when the row\'s array overlaps the supplied values)\n\nString fields (op in STRING_OPS, value is a string): span_name, customer_id, customer_user_id, session_id, error, dataset_id.\n\nNumeric fields (op in NUMERIC_OPS, value is a number): duration (nanoseconds), llm_cost (USD).\n\nArray fields (op = "any", value is an array): tags (strings), rules_invoked (rule names from this project, strings), behaviors (behavior UUIDs).\n\n\x08\nSpecial:\n  full_text_search       op = "contains", value is a string searched across span attribute text.\n  span_attributes_roots  matches a single span attribute key/value:\n                           {"field":"span_attributes_roots","key":"<attribute-name>","op":<STRING_OPS>,"value":"<string>"}\n\nExample: --filters \'[{"field":"span_name","op":"=","value":"agent.run"}]\'\n')
-@click.option("--sort-by", "sort_by", default=None, help='{"field":<sort_field>,"direction":"asc"|"desc"} where sort_field is one of: created_at, span_name, duration, llm_cost. Default when omitted: {"field":"created_at","direction":"desc"}.')
-@click.option("--time-range", "time_range", default=None, help='{"start_time":<iso8601-string>|null,"end_time":<iso8601-string>|null}. Either bound may be null to leave that side open. Invalid timestamps return 400.')
-@click.option("--pagination", "pagination", required=True, help='{"limit":<int 1-200>,"cursorSortValue":<string>|null,"cursorItemId":<string>|null}.\n\nFirst page: pass null for both cursor fields. Each response returns nextCursor:{sort_value,trace_id} (or null when hasMore=false); copy those into cursorSortValue and cursorItemId for the next page.')
+@click.option("--filters", "filters", default=None, help='Filter expressions, ANDed together. Each item is `{"field":<field>,"op":<op>,"value":<value>}`. Allowed ops depend on the field\'s type.\n\n**Op groups:**\n- `STRING_OPS` = `=` | `!=` | `contains` | `does_not_contain` | `exists` | `is_absent`\n- `NUMERIC_OPS` = `=` | `!=` | `<` | `<=` | `>` | `>=`\n- `ARRAY_ANY` = `any` (matches when the row\'s array overlaps the supplied values)\n\n**String fields** (op in STRING_OPS, value is a string): `span_name`, `customer_id`, `customer_user_id`, `session_id`, `error`, `dataset_id`.\n\n**Numeric fields** (op in NUMERIC_OPS, value is a number): `duration` (nanoseconds), `llm_cost` (USD).\n\n**Array fields** (op = `any`, value is an array): `tags` (strings), `rules_invoked` (rule names from this project, strings), `behaviors` (behavior UUIDs).\n\n**Special:**\n- `full_text_search`: op = `contains`, value is a string searched across span attribute text.\n- `span_attributes_roots`: matches a single span attribute key/value: `{"field":"span_attributes_roots","key":"<attribute-name>","op":<STRING_OPS>,"value":"<string>"}`')
+@click.option("--sort-by", "sort_by", default=None, help='`{"field":<sort_field>,"direction":"asc"|"desc"}` where `sort_field` is one of: `created_at`, `span_name`, `duration`, `llm_cost`. Default when omitted: `{"field":"created_at","direction":"desc"}`.')
+@click.option("--time-range", "time_range", default=None, help='`{"start_time":<iso8601-string>|null,"end_time":<iso8601-string>|null}`. Either bound may be null to leave that side open. Invalid timestamps return 400.')
+@click.option("--pagination", "pagination", required=True, help='`{"limit":<int 1-200>,"cursorSortValue":<string>|null,"cursorItemId":<string>|null}`.\n\nFirst page: pass null for both cursor fields. Each response returns `nextCursor:{sort_value,trace_id}` (or null when `hasMore=false`); copy those into `cursorSortValue` and `cursorItemId` for the next page.')
 @click.pass_context
 def traces_search(ctx, project_id, filters, sort_by, time_range, pagination):
-    'Search traces in a project.\n\n\x08\nFiltering, sorting, time bounds, and pagination are passed as JSON via the body fields below — see each flag\'s description for its full reference.\n\n\x08\n\x08\nExample: judgment traces search <PROJECT_ID> \\\n  --filters \'[{"field":"span_name","op":"=","value":"agent.run"}]\' \\\n  --sort-by \'{"field":"llm_cost","direction":"desc"}\' \\\n  --pagination \'{"limit":25,"cursorSortValue":null,"cursorItemId":null}\''
+    'Search traces.\n\n\x08\nFilter, sort, time-bound, and paginate traces in a project. See each body field for the exact JSON shape it expects.'
     url = "/traces/search"
     body = {}
     body["project_id"] = project_id
@@ -594,10 +593,10 @@ def traces_search(ctx, project_id, filters, sort_by, time_range, pagination):
 
 @traces_group.command("span")
 @click.argument("project_id")
-@click.option("--spans", "spans", required=True, help='JSON value for spans.')
+@click.option("--spans", "spans", required=True, help='Up to 20 trace/span ID pairs to fetch span details for in a single request.')
 @click.pass_context
 def traces_span(ctx, project_id, spans):
-    """Get trace span details."""
+    'Get span details.\n\n\x08\nFetch full details (inputs/outputs/attributes) for up to 20 specific spans across one or more traces.'
     url = "/traces/span"
     body = {}
     body["project_id"] = project_id
@@ -611,7 +610,7 @@ def traces_span(ctx, project_id, spans):
 @click.argument("trace_id")
 @click.pass_context
 def traces_spans(ctx, project_id, trace_id):
-    """Get trace spans."""
+    """List a trace’s spans."""
     url = "/traces/spans"
     body = {}
     body["project_id"] = project_id
@@ -625,7 +624,7 @@ def traces_spans(ctx, project_id, trace_id):
 @click.argument("trace_id")
 @click.pass_context
 def traces_tags(ctx, project_id, trace_id):
-    """Get trace tags."""
+    """List a trace’s tags."""
     url = "/traces/tags"
     body = {}
     body["project_id"] = project_id
