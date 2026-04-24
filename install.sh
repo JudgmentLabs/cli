@@ -114,5 +114,47 @@ case ":$PATH:" in
     ;;
 esac
 
+# Wire up shell completion. Render the script to a file once and source it
+# from the rc -- avoids spawning a Python subprocess on every shell startup.
+# Set NO_COMPLETIONS=1 to skip. Failures here are non-fatal.
+install_completions() {
+  [[ "${NO_COMPLETIONS:-}" = "1" ]] && return 0
+
+  local bin="$INSTALL_DIR/venv/bin/judgment"
+  local marker="# >>> judgment cli completion >>>"
+
+  append_rc() {
+    local rc="$1" body="$2"
+    touch "$rc"
+    grep -qF "$marker" "$rc" 2>/dev/null && return
+    printf '\n%s\n%s\n# <<< judgment cli completion <<<\n' "$marker" "$body" >> "$rc"
+    info "added shell completion to $rc (set NO_COMPLETIONS=1 to skip)"
+  }
+
+  case "$(basename "${SHELL:-}")" in
+    zsh)
+      local file="$INSTALL_DIR/_judgment.zsh"
+      "$bin" completion zsh > "$file" 2>/dev/null || return 0
+      append_rc "$HOME/.zshrc" "$(printf 'autoload -Uz compinit 2>/dev/null && compinit -u 2>/dev/null\n[ -s "%s" ] && source "%s"' "$file" "$file")"
+      ;;
+    bash)
+      local file="$INSTALL_DIR/_judgment.bash" rc
+      [[ "$(uname -s)" = "Darwin" ]] && rc="$HOME/.bash_profile" || rc="$HOME/.bashrc"
+      "$bin" completion bash > "$file" 2>/dev/null || return 0
+      append_rc "$rc" "[ -s \"$file\" ] && source \"$file\""
+      ;;
+    fish)
+      # fish auto-loads from ~/.config/fish/completions/, no rc edit needed.
+      local fd="${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions"
+      mkdir -p "$fd"
+      "$bin" completion fish > "$fd/judgment.fish" 2>/dev/null \
+        && info "installed fish completions to $fd/judgment.fish"
+      ;;
+  esac
+}
+
+install_completions || true
+
 echo
 green "done. Try: judgment --version"
+green "restart your shell (or 'source' your rc file) to pick up tab-completion."
