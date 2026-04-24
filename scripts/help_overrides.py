@@ -392,7 +392,7 @@ OPTION_HELP: dict[str, dict[str, str]] = {
         "judge_id": "Attach the new behavior to an existing judge instead of creating one. The judge must be score_type=categorical and have no existing behaviors.",
     },
     "behaviors.update": {
-        "description": "New human-readable description for the behavior. Pass null to clear it.",
+        "description": "New human-readable description for the behavior.",
     },
     "behaviors.delete": {
         "delete_scorer": "When true, also delete the underlying prompt scorer if no other behaviors reference it.",

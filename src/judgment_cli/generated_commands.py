@@ -264,7 +264,7 @@ def behaviors_list(ctx, project_id):
 @behaviors_group.command("update")
 @click.argument("project_id")
 @click.argument("behavior_id")
-@click.option("--description", "description", default=None, help='New human-readable description for the behavior. Pass null to clear it.')
+@click.option("--description", "description", default=None, help='New human-readable description for the behavior.')
 @click.pass_context
 def behaviors_update(ctx, project_id, behavior_id, description):
     "Update a behavior's description. Requires the developer role.\n\n\x08\n\x08\nExample: judgment behaviors update <PROJECT_ID> <BEHAVIOR_ID> --description 'New description'"
