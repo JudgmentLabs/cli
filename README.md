@@ -64,17 +64,22 @@ judgment logout   # delete the credentials file
 
 ## Shell completion
 
-Installed automatically when you `brew install` the CLI. For other install methods, eval the completion script from your shell's rc file:
+The `curl` installer wires up completions automatically (zsh, bash, fish). Set `NO_COMPLETIONS=1` before piping to `bash` to opt out, or remove the `# >>> judgment cli completion >>>` block from your rc file later.
+
+`brew install` drops the zsh completion script in `$(brew --prefix)/share/zsh/site-functions/`. zsh picks it up once you've followed [Homebrew's one-time shell-completion setup](https://docs.brew.sh/Shell-Completion) — this same setup enables completions for every brew-installed CLI, not just `judgment`.
+
+To install completions manually for any shell:
 
 ```bash
-# bash (~/.bashrc)
+# bash (~/.bashrc, or ~/.bash_profile on macOS)
 eval "$(judgment completion bash)"
 
 # zsh (~/.zshrc)
+autoload -Uz compinit && compinit
 eval "$(judgment completion zsh)"
 
-# fish (~/.config/fish/config.fish)
-judgment completion fish | source
+# fish (~/.config/fish/completions/judgment.fish — auto-loaded)
+judgment completion fish > ~/.config/fish/completions/judgment.fish
 ```
 
 ## Usage
