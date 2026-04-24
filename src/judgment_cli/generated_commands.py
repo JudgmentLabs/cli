@@ -21,6 +21,73 @@ def automations_group() -> None:
     pass
 
 
+@automations_group.command("create")
+@click.argument("project_id")
+@click.argument("name")
+@click.option("--description", "description", default=None, help='Human-readable description shown in the UI.')
+@click.option("--conditions", "conditions", required=True, help='JSON array of rule conditions. Each condition compares a behavior score or metric to a threshold. Items are ANDed or ORed together based on --combine-type ("all" vs "any").\n\n\x08\nCondition shape:\n  {"metric": {"type":<metric_type>, ...}, "operator": ">=|<=|>|<|==|!=", "threshold": <number>}\n\n\x08\nSupported metric types:\n  behavior       {"type":"behavior","behavior_id":"<uuid>"}\n  latency        {"type":"latency"}           (milliseconds)\n  cost           {"type":"cost"}              (USD)\n  token_count    {"type":"token_count"}\n\nExample: --conditions \'[{"metric":{"type":"behavior","behavior_id":"<uuid>"},"operator":">=","threshold":0.8}]\'')
+@click.argument("combine_type", type=click.Choice(['all', 'any']))
+@click.option("--actions", "actions", default=None, help='JSON object describing notification actions to fire when the automation triggers. Omit to store the automation with no actions.\n\n\x08\nShape: {"slack":[{"channel":"<channel>","webhook_url":"<url>"}], "pagerduty":[{"integration_key":"<key>"}], "email":[{"to":"<addr>"}]}\n\nExample: --actions \'{"slack":[{"channel":"#alerts","webhook_url":"https://hooks.slack.com/..."}]}\'')
+@click.option("--cooldown-period", "cooldown_period", default=None, type=float, help='Cooldown duration as a plain number. Paired with --cooldown-period-unit. Example: --cooldown-period 15 --cooldown-period-unit minutes.')
+@click.option("--cooldown-period-unit", "cooldown_period_unit", default=None, type=click.Choice(['seconds', 'minutes', 'hours', 'days']), help='Unit for --cooldown-period: seconds | minutes | hours | days.')
+@click.option("--trigger-frequency-count", "trigger_frequency_count", default=None, type=float, help='Maximum triggers allowed within the window defined by --trigger-frequency-period and --trigger-frequency-period-unit.')
+@click.option("--trigger-frequency-period", "trigger_frequency_period", default=None, type=float, help='Window length for the trigger-frequency limit. Paired with --trigger-frequency-period-unit.')
+@click.option("--trigger-frequency-period-unit", "trigger_frequency_period_unit", default=None, type=click.Choice(['seconds', 'minutes', 'hours', 'days']), help='Unit for --trigger-frequency-period: seconds | minutes | hours | days.')
+@click.pass_context
+def automations_create(ctx, project_id, name, description, conditions, combine_type, actions, cooldown_period, cooldown_period_unit, trigger_frequency_count, trigger_frequency_period, trigger_frequency_period_unit):
+    'Create an automation (rule) in a project.\n\n\x08\nAn automation watches behavior/latency/cost metrics on the project and fires actions when its conditions match. Requires the developer role.\n\n\x08\n\x08\nExample: judgment automations create <PROJECT_ID> my-rule any \\\n  --description \'Alert on low relevance scores\' \\\n  --conditions \'[{"metric":{"type":"behavior","behavior_id":"<BEHAVIOR_ID>"},"operator":"<","threshold":0.7}]\' \\\n  --actions \'{"slack":[{"channel":"#alerts","webhook_url":"https://hooks.slack.com/..."}]}\' \\\n  --cooldown-period 5 --cooldown-period-unit minutes'
+    url = "/automations/create"
+    body = {}
+    body["project_id"] = project_id
+    body["name"] = name
+    if description is not None:
+        body["description"] = description
+    body["conditions"] = json.loads(conditions)
+    body["combine_type"] = combine_type
+    if actions is not None:
+        body["actions"] = json.loads(actions)
+    if cooldown_period is not None:
+        body["cooldown_period"] = cooldown_period
+    if cooldown_period_unit is not None:
+        body["cooldown_period_unit"] = cooldown_period_unit
+    if trigger_frequency_count is not None:
+        body["trigger_frequency_count"] = trigger_frequency_count
+    if trigger_frequency_period is not None:
+        body["trigger_frequency_period"] = trigger_frequency_period
+    if trigger_frequency_period_unit is not None:
+        body["trigger_frequency_period_unit"] = trigger_frequency_period_unit
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@automations_group.command("delete")
+@click.argument("project_id")
+@click.argument("rule_id")
+@click.pass_context
+def automations_delete(ctx, project_id, rule_id):
+    'Delete an automation. Requires the admin role.\n\n\x08\n\x08\nExample: judgment automations delete <PROJECT_ID> <RULE_ID>'
+    url = "/automations/delete"
+    body = {}
+    body["project_id"] = project_id
+    body["rule_id"] = rule_id
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@automations_group.command("get")
+@click.argument("project_id")
+@click.argument("rule_id")
+@click.pass_context
+def automations_get(ctx, project_id, rule_id):
+    'Fetch the full definition of a single automation by ID.\n\n\x08\n\x08\nExample: judgment automations get <PROJECT_ID> <RULE_ID>'
+    url = "/automations/detail"
+    body = {}
+    body["project_id"] = project_id
+    body["rule_id"] = rule_id
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
 @automations_group.command("list")
 @click.argument("project_id")
 @click.pass_context
@@ -29,6 +96,44 @@ def automations_list(ctx, project_id):
     url = "/automations/list"
     body = {}
     body["project_id"] = project_id
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@automations_group.command("update")
+@click.argument("project_id")
+@click.argument("rule_id")
+@click.option("--name", "name", default=None, help='New name for the automation.')
+@click.option("--description", "description", default=None, help='New description for the automation.')
+@click.option("--conditions", "conditions", default=None, help='JSON array of rule conditions. Each condition compares a behavior score or metric to a threshold. Items are ANDed or ORed together based on --combine-type ("all" vs "any").\n\n\x08\nCondition shape:\n  {"metric": {"type":<metric_type>, ...}, "operator": ">=|<=|>|<|==|!=", "threshold": <number>}\n\n\x08\nSupported metric types:\n  behavior       {"type":"behavior","behavior_id":"<uuid>"}\n  latency        {"type":"latency"}           (milliseconds)\n  cost           {"type":"cost"}              (USD)\n  token_count    {"type":"token_count"}\n\nExample: --conditions \'[{"metric":{"type":"behavior","behavior_id":"<uuid>"},"operator":">=","threshold":0.8}]\'')
+@click.option("--combine-type", "combine_type", default=None, type=click.Choice(['all', 'any']))
+@click.option("--actions", "actions", default=None, help='JSON object describing notification actions to fire when the automation triggers. Omit to store the automation with no actions.\n\n\x08\nShape: {"slack":[{"channel":"<channel>","webhook_url":"<url>"}], "pagerduty":[{"integration_key":"<key>"}], "email":[{"to":"<addr>"}]}\n\nExample: --actions \'{"slack":[{"channel":"#alerts","webhook_url":"https://hooks.slack.com/..."}]}\'')
+@click.option("--active", "active", default=None, type=bool, help='Enable (true) or disable (false) the automation without modifying other fields.')
+@click.option("--cooldown-period", "cooldown_period", default=None, help='JSON 2-tuple [period, unit] describing the minimum wait between triggers.\n\n\x08\nShape: [<period:int>, <unit:"seconds"|"minutes"|"hours"|"days">]\n\nExample: --cooldown-period \'[15, "minutes"]\'  (at least 15 min between triggers)')
+@click.option("--trigger-frequency", "trigger_frequency", default=None, help='JSON 3-tuple [count, period, unit] describing the rate-limit window. Omit to disable frequency limiting.\n\n\x08\nShape: [<max_trigger_count:int>, <period:int>, <unit:"seconds"|"minutes"|"hours"|"days">]\n\nExample: --trigger-frequency \'[5, 1, "hours"]\'  (max 5 triggers per 1 hour)')
+@click.pass_context
+def automations_update(ctx, project_id, rule_id, name, description, conditions, combine_type, actions, active, cooldown_period, trigger_frequency):
+    'Update an existing automation. All fields other than the positional arguments are optional — only supplied flags are applied.\n\n\x08\nUse --active true/false to enable or disable without changing other fields. Requires the developer role.\n\n\x08\n\x08\nExample: judgment automations update <PROJECT_ID> <RULE_ID> --active false'
+    url = "/automations/update"
+    body = {}
+    body["project_id"] = project_id
+    body["rule_id"] = rule_id
+    if name is not None:
+        body["name"] = name
+    if description is not None:
+        body["description"] = description
+    if conditions is not None:
+        body["conditions"] = json.loads(conditions)
+    if combine_type is not None:
+        body["combine_type"] = combine_type
+    if actions is not None:
+        body["actions"] = json.loads(actions)
+    if active is not None:
+        body["active"] = active
+    if cooldown_period is not None:
+        body["cooldown_period"] = json.loads(cooldown_period)
+    if trigger_frequency is not None:
+        body["trigger_frequency"] = json.loads(trigger_frequency)
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
@@ -41,6 +146,87 @@ def automations_list(ctx, project_id):
 def behaviors_group() -> None:
     """View and manage behaviors."""
     pass
+
+
+@behaviors_group.command("create-binary")
+@click.argument("project_id")
+@click.argument("name")
+@click.argument("prompt")
+@click.option("--description", "description", default=None, help='Human-readable description shown in the UI.')
+@click.option("--model", "model", default=None, help='LLM model ID used by the judge prompt. Defaults to "gpt-5.2" when omitted.')
+@click.option("--category-ids", "category_ids", multiple=True, help='UUID of a category to attach the behavior to. Repeat the flag to attach multiple categories: --category-ids <uuid1> --category-ids <uuid2>.')
+@click.option("--advanced-settings", "advanced_settings", default=None, help='JSON object overriding the judge\'s online evaluation configuration. If omitted, defaults are applied.\n\n\x08\nShape:\n  {\n    "online_evaluation_mode": "always" | "sampled" | "off",\n    "online_sampling_rate": <number 0-1>,\n    "online_span_triggers": [{"span_name":"<name>","attribute_filters":[...]}]?,\n    "online_session_scoring": <bool>?\n  }\n\nExample: --advanced-settings \'{"online_evaluation_mode":"sampled","online_sampling_rate":0.1}\'')
+@click.option("--judge-id", "judge_id", default=None, help='Attach the new behavior to an existing judge instead of creating one. The judge must be score_type=binary and have no existing behaviors.')
+@click.pass_context
+def behaviors_create_binary(ctx, project_id, name, prompt, description, model, category_ids, advanced_settings, judge_id):
+    'Create a binary (Yes/No) behavior backed by a prompt judge.\n\n\x08\nScores each trace/span as "Yes" (true) or "No" (false) using the prompt you supply. Pass --judge-id to attach to an existing judge instead of creating a new prompt scorer. Requires the developer role.\n\n\x08\n\x08\nExample: judgment behaviors create-binary <PROJECT_ID> \'Relevance\' \\\n  \'Was the assistant response relevant to the user message?\' \\\n  --description \'Binary relevance check\' --model gpt-5.2'
+    url = "/behaviors/create-binary"
+    body = {}
+    body["project_id"] = project_id
+    body["name"] = name
+    body["prompt"] = prompt
+    if description is not None:
+        body["description"] = description
+    if model is not None:
+        body["model"] = model
+    if category_ids:
+        body["category_ids"] = list(category_ids)
+    if advanced_settings is not None:
+        body["advanced_settings"] = json.loads(advanced_settings)
+    if judge_id is not None:
+        body["judge_id"] = judge_id
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@behaviors_group.command("create-classifier")
+@click.argument("project_id")
+@click.argument("name")
+@click.argument("prompt")
+@click.option("--options", "options", required=True, help='JSON array of the allowed output categories the classifier judge can return. Must contain at least one option.\n\n\x08\nShape:\n  [\n    {"name":"<label>", "description":"<optional human description>", "category_ids":["<uuid>", ...]},\n    ...\n  ]\n\nExample: --options \'[{"name":"Good","description":"helpful response"},{"name":"Bad","description":"unhelpful or incorrect"}]\'')
+@click.option("--model", "model", default=None, help='LLM model ID used by the judge prompt. Defaults to "gpt-5.2" when omitted.')
+@click.option("--category-ids", "category_ids", multiple=True, help='UUID of a category to attach the behavior to. Repeat the flag to attach multiple categories: --category-ids <uuid1> --category-ids <uuid2>.')
+@click.option("--advanced-settings", "advanced_settings", default=None, help='JSON object overriding the judge\'s online evaluation configuration. If omitted, defaults are applied.\n\n\x08\nShape:\n  {\n    "online_evaluation_mode": "always" | "sampled" | "off",\n    "online_sampling_rate": <number 0-1>,\n    "online_span_triggers": [{"span_name":"<name>","attribute_filters":[...]}]?,\n    "online_session_scoring": <bool>?\n  }\n\nExample: --advanced-settings \'{"online_evaluation_mode":"sampled","online_sampling_rate":0.1}\'')
+@click.option("--judge-id", "judge_id", default=None, help='Attach the new behavior to an existing judge instead of creating one. The judge must be score_type=categorical and have no existing behaviors.')
+@click.pass_context
+def behaviors_create_classifier(ctx, project_id, name, prompt, options, model, category_ids, advanced_settings, judge_id):
+    'Create a categorical (multi-class) behavior backed by a prompt judge.\n\n\x08\nScores each trace/span into one of the --options categories. Pass --judge-id to attach to an existing classifier judge instead of creating a new one. Requires the developer role.\n\n\x08\n\x08\nExample: judgment behaviors create-classifier <PROJECT_ID> \'Sentiment\' \\\n  \'Classify the assistant response tone.\' \\\n  --options \'[{"name":"Positive"},{"name":"Neutral"},{"name":"Negative"}]\''
+    url = "/behaviors/create-classifier"
+    body = {}
+    body["project_id"] = project_id
+    body["name"] = name
+    body["prompt"] = prompt
+    body["options"] = json.loads(options)
+    if model is not None:
+        body["model"] = model
+    if category_ids:
+        body["category_ids"] = list(category_ids)
+    if advanced_settings is not None:
+        body["advanced_settings"] = json.loads(advanced_settings)
+    if judge_id is not None:
+        body["judge_id"] = judge_id
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@behaviors_group.command("delete")
+@click.argument("project_id")
+@click.argument("behavior_id")
+@click.option("--delete-scorer", "delete_scorer", default=None, type=bool, help='When true, also delete the underlying prompt scorer if no other behaviors reference it.')
+@click.option("--delete-all-values", "delete_all_values", default=None, type=bool, help='For classifier behaviors, when true deletes every category row for this judge (not just the provided BEHAVIOR_ID). Ignored for binary behaviors (those always delete both rows).')
+@click.pass_context
+def behaviors_delete(ctx, project_id, behavior_id, delete_scorer, delete_all_values):
+    'Delete a behavior. Requires the admin role.\n\n\x08\nBinary behaviors always delete both the true and false rows. For classifier behaviors, pass --delete-all-values true to delete every category row for the judge at once. Pass --delete-scorer true to also delete the underlying prompt scorer when no other behaviors reference it.\n\n\x08\n\x08\nExample: judgment behaviors delete <PROJECT_ID> <BEHAVIOR_ID> --delete-scorer true'
+    url = "/behaviors/delete"
+    body = {}
+    body["project_id"] = project_id
+    body["behavior_id"] = behavior_id
+    if delete_scorer is not None:
+        body["delete_scorer"] = delete_scorer
+    if delete_all_values is not None:
+        body["delete_all_values"] = delete_all_values
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
 
 
 @behaviors_group.command("get")
@@ -71,6 +257,23 @@ def behaviors_list(ctx, project_id):
     url = "/behaviors/list"
     body = {}
     body["project_id"] = project_id
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@behaviors_group.command("update")
+@click.argument("project_id")
+@click.argument("behavior_id")
+@click.option("--description", "description", default=None, help='New human-readable description for the behavior. Pass null to clear it.')
+@click.pass_context
+def behaviors_update(ctx, project_id, behavior_id, description):
+    "Update a behavior's description. Requires the developer role.\n\n\x08\n\x08\nExample: judgment behaviors update <PROJECT_ID> <BEHAVIOR_ID> --description 'New description'"
+    url = "/behaviors/update"
+    body = {}
+    body["project_id"] = project_id
+    body["behavior_id"] = behavior_id
+    if description is not None:
+        body["description"] = description
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
@@ -135,6 +338,30 @@ def judges_settings(ctx, project_id, judge_id):
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
+
+@judges_group.command("update-settings")
+@click.argument("project_id")
+@click.argument("judge_id")
+@click.argument("evaluation_mode", type=click.Choice(['continuous', 'on_demand']))
+@click.argument("sampling_rate", type=float)
+@click.option("--span-triggers", "span_triggers", default=None, help='JSON array of span filters that restrict which spans the judge evaluates. Omit to evaluate all spans.\n\n\x08\nShape: [{"span_name":"<name>","attribute_filters":[{"key":"<attr>","op":"=","value":"<string>"}]}]\n\nExample: --span-triggers \'[{"span_name":"agent.run","attribute_filters":[]}]\'')
+@click.option("--session-scoring", "session_scoring", default=None, type=bool, help='When true, run the judge at session granularity instead of per-span.')
+@click.pass_context
+def judges_update_settings(ctx, project_id, judge_id, evaluation_mode, sampling_rate, span_triggers, session_scoring):
+    'Update a judge\'s online-evaluation configuration.\n\n\x08\nApplies to all behaviors backed by the judge. evaluation_mode selects whether the judge runs continuously or on demand; sampling_rate is a percentage (0-100) of qualifying spans to score. Requires the developer role.\n\n\x08\n\x08\nExample: judgment judges update-settings <PROJECT_ID> <JUDGE_ID> sampled 10 \\\n  --span-triggers \'[{"span_name":"agent.run","attribute_filters":[]}]\''
+    url = "/judges/update-settings"
+    body = {}
+    body["project_id"] = project_id
+    body["judge_id"] = judge_id
+    body["evaluation_mode"] = evaluation_mode
+    body["sampling_rate"] = sampling_rate
+    if span_triggers is not None:
+        body["span_triggers"] = json.loads(span_triggers)
+    if session_scoring is not None:
+        body["session_scoring"] = session_scoring
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
 # ────────────────────────────────────────────────────────────────────
 # Group: projects
 # ────────────────────────────────────────────────────────────────────
@@ -146,12 +373,48 @@ def projects_group() -> None:
     pass
 
 
+@projects_group.command("add-favorite")
+@click.argument("project_id")
+@click.pass_context
+def projects_add_favorite(ctx, project_id):
+    'Mark a project as a favorite for your user so it appears pinned in the UI.\n\n\x08\n\x08\nExample: judgment projects add-favorite <PROJECT_ID>'
+    url = "/projects/add-favorite"
+    body = {}
+    body["project_id"] = project_id
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@projects_group.command("create")
+@click.argument("project_name")
+@click.pass_context
+def projects_create(ctx, project_name):
+    'Create a new project in your organization. Requires the developer role.\n\n\x08\n\x08\nExample: judgment projects create my-new-project'
+    url = "/projects/create"
+    body = {}
+    body["project_name"] = project_name
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
 @projects_group.command("list")
 @click.pass_context
 def projects_list(ctx):
     """List projects."""
     url = "/projects"
     result = ctx.obj["client"].request("GET", url)
+    _output(result)
+
+
+@projects_group.command("remove-favorite")
+@click.argument("project_id")
+@click.pass_context
+def projects_remove_favorite(ctx, project_id):
+    "Remove a project from your user's favorites.\n\n\x08\n\x08\nExample: judgment projects remove-favorite <PROJECT_ID>"
+    url = "/projects/remove-favorite"
+    body = {}
+    body["project_id"] = project_id
+    result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
 # ────────────────────────────────────────────────────────────────────
@@ -240,6 +503,23 @@ def traces_group() -> None:
     pass
 
 
+@traces_group.command("add-tags")
+@click.argument("project_id")
+@click.argument("trace_id")
+@click.option("--tags", "tags", multiple=True, help='Tag string to attach to the trace. Repeat --tags to attach multiple tags: --tags a --tags b.')
+@click.pass_context
+def traces_add_tags(ctx, project_id, trace_id, tags):
+    'Attach one or more string tags to an existing trace.\n\n\x08\nTags are additive — existing tags on the trace are preserved. Repeat --tags to add multiple tags.\n\n\x08\n\x08\nExample: judgment traces add-tags <PROJECT_ID> <TRACE_ID> \\\n  --tags regression --tags investigate'
+    url = "/traces/add-tags"
+    body = {}
+    body["project_id"] = project_id
+    body["trace_id"] = trace_id
+    if tags:
+        body["tags"] = list(tags)
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
 @traces_group.command("behaviors")
 @click.argument("project_id")
 @click.argument("trace_id")
@@ -250,6 +530,27 @@ def traces_behaviors(ctx, project_id, trace_id):
     body = {}
     body["project_id"] = project_id
     body["trace_id"] = trace_id
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@traces_group.command("evaluate")
+@click.argument("project_id")
+@click.option("--evaluate-all", "evaluate_all", default=None, type=bool, help='When true, re-evaluate every trace in the project. Mutually exclusive with --trace-ids.')
+@click.option("--trace-ids", "trace_ids", multiple=True, help='Trace UUID to re-evaluate. Repeat --trace-ids to evaluate multiple: --trace-ids <id1> --trace-ids <id2>.')
+@click.option("--specific-judge-names", "specific_judge_names", multiple=True, help='Restrict evaluation to judges with these names. Repeat the flag to pass multiple. Omit to run every applicable judge.')
+@click.pass_context
+def traces_evaluate(ctx, project_id, evaluate_all, trace_ids, specific_judge_names):
+    "Queue traces for re-evaluation by the project's judges.\n\n\x08\nPass specific trace IDs with --trace-ids (repeat the flag) or use --evaluate-all true to re-evaluate every trace in the project. Use --specific-judge-names to restrict which judges run (repeat the flag). Requires the developer role.\n\n\x08\n\x08\nExample: judgment traces evaluate <PROJECT_ID> \\\n  --trace-ids <TRACE_ID_1> --trace-ids <TRACE_ID_2> \\\n  --specific-judge-names Relevance"
+    url = "/traces/evaluate"
+    body = {}
+    body["project_id"] = project_id
+    if evaluate_all is not None:
+        body["evaluate_all"] = evaluate_all
+    if trace_ids:
+        body["trace_ids"] = list(trace_ids)
+    if specific_judge_names:
+        body["specific_judge_names"] = list(specific_judge_names)
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
