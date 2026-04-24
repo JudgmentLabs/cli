@@ -81,62 +81,91 @@ First page: pass null for both cursor fields. Each response returns nextCursor:{
 
 
 _AUTOMATION_CONDITIONS_HELP = """\
-JSON array of rule conditions. Each condition compares a behavior score or metric to a threshold. Items are ANDed or ORed together based on --combine-type ("all" vs "any").
+JSON array of rule conditions. Each condition references a named metric/scorer on the project and a comparison. Items are ANDed or ORed together based on the COMBINE_TYPE positional argument ("all" vs "any").
 
 \b
 Condition shape:
-  {"metric": {"type":<metric_type>, ...}, "operator": ">=|<=|>|<|==|!=", "threshold": <number>}
+  {
+    "metric": {
+      "scorer_type": "behavior" | "judge" | "prompt" | "custom" | "static" | "span_attribute" | "error",
+      "name": "<scorer or metric name>",
+      "threshold": <number | string | null>?
+    },
+    "comparison": "lt" | "gt" | "eq" | "gte" | "lte" | "fails" | "succeeds" | "chooses" | "detected" | "equals" | "contains" | "exists"
+  }
 
 \b
-Supported metric types:
-  behavior       {"type":"behavior","behavior_id":"<uuid>"}
-  latency        {"type":"latency"}           (milliseconds)
-  cost           {"type":"cost"}              (USD)
-  token_count    {"type":"token_count"}
+Common scorer_type values:
+  behavior        Judge-scored behavior (name = behavior name, e.g. "Relevance")
+  static          Built-in metrics like "duration" (ms) or "llm_cost" (USD)
+  prompt/custom   Prompt or custom scorer by name
+  span_attribute  Arbitrary span attribute key (name = attribute key)
+  error           Span error condition
 
-Example: --conditions '[{"metric":{"type":"behavior","behavior_id":"<uuid>"},"operator":">=","threshold":0.8}]'\
+Example: --conditions '[{"metric":{"scorer_type":"behavior","name":"Relevance","threshold":0.7},"comparison":"gte"}]'\
 """
 
 _AUTOMATION_ACTIONS_HELP = """\
-JSON object describing notification actions to fire when the automation triggers. Omit to store the automation with no actions.
+JSON object describing what happens when the automation fires. All top-level keys are optional — include only the actions you want configured.
 
 \b
-Shape: {"slack":[{"channel":"<channel>","webhook_url":"<url>"}], "pagerduty":[{"integration_key":"<key>"}], "email":[{"to":"<addr>"}]}
+Shape:
+  {
+    "notification": {
+      "enabled": <bool>?,
+      "communication_methods": ["email" | "slack" | "pagerduty"],
+      "email_addresses": ["<addr>", ...]?,
+      "pagerduty_config": {"routing_key":"<key>","severity":"critical"|"error"|"warning"|"info"}?
+    }?,
+    "dataset_addition": {
+      "enabled": <bool>?,
+      "dataset_name": "<dataset>",
+      "metadata_fields": <any>?
+    }?,
+    "behavior_evaluation": {
+      "enabled": <bool>?,
+      "behavior_judge_names": ["<judge_name>", ...]
+    }?
+  }
 
-Example: --actions '{"slack":[{"channel":"#alerts","webhook_url":"https://hooks.slack.com/..."}]}'\
+Slack notifications are configured per-organization in the Judgment UI; pass "slack" in communication_methods to use them. Example: --actions '{"notification":{"communication_methods":["slack"]}}'\
 """
 
 _AUTOMATION_TRIGGER_FREQUENCY_HELP = """\
-JSON 3-tuple [count, period, unit] describing the rate-limit window. Omit to disable frequency limiting.
+JSON 3-tuple [count, period, unit] describing the rate-limit window. Pass null to disable frequency limiting.
 
 \b
-Shape: [<max_trigger_count:int>, <period:int>, <unit:"seconds"|"minutes"|"hours"|"days">]
+Shape: [<max_trigger_count:number>, <period:number>, <unit:"seconds"|"minutes"|"hours"|"days">]
 
 Example: --trigger-frequency '[5, 1, "hours"]'  (max 5 triggers per 1 hour)\
 """
 
 _AUTOMATION_COOLDOWN_HELP = """\
-JSON 2-tuple [period, unit] describing the minimum wait between triggers.
+JSON 2-tuple [period, unit] describing the minimum wait between triggers. Pass null to clear the cooldown.
 
 \b
-Shape: [<period:int>, <unit:"seconds"|"minutes"|"hours"|"days">]
+Shape: [<period:number>, <unit:"seconds"|"minutes"|"hours"|"days">]
 
 Example: --cooldown-period '[15, "minutes"]'  (at least 15 min between triggers)\
 """
 
 _BEHAVIOR_ADVANCED_SETTINGS_HELP = """\
-JSON object overriding the judge's online evaluation configuration. If omitted, defaults are applied.
+JSON object overriding the judge's online-evaluation configuration. All four fields are required when this flag is supplied.
 
 \b
 Shape:
   {
-    "online_evaluation_mode": "always" | "sampled" | "off",
-    "online_sampling_rate": <number 0-1>,
-    "online_span_triggers": [{"span_name":"<name>","attribute_filters":[...]}]?,
-    "online_session_scoring": <bool>?
+    "online_evaluation_mode": "continuous" | "on_demand",
+    "online_sampling_rate": <number 0-100>,
+    "online_span_triggers": [
+      {"field":"span_name"|"span_attribute","operator":"contains"|"equals"|"exists","value":"<string>","key":"<attr-key>"?}
+    ],
+    "online_session_scoring": <bool>
   }
 
-Example: --advanced-settings '{"online_evaluation_mode":"sampled","online_sampling_rate":0.1}'\
+"continuous" runs the judge automatically on qualifying spans; "on_demand" requires a manual `judgment traces evaluate` call. online_sampling_rate is a percent of matching spans to score.
+
+Example: --advanced-settings '{"online_evaluation_mode":"continuous","online_sampling_rate":10,"online_span_triggers":[],"online_session_scoring":false}'\
 """
 
 _BEHAVIOR_CATEGORY_IDS_HELP = (
@@ -158,12 +187,23 @@ Example: --options '[{"name":"Good","description":"helpful response"},{"name":"B
 """
 
 _JUDGE_SPAN_TRIGGERS_HELP = """\
-JSON array of span filters that restrict which spans the judge evaluates. Omit to evaluate all spans.
+JSON array of span filters that restrict which spans the judge evaluates. Pass [] to evaluate all spans.
 
 \b
-Shape: [{"span_name":"<name>","attribute_filters":[{"key":"<attr>","op":"=","value":"<string>"}]}]
+Shape:
+  [
+    {
+      "field": "span_name" | "span_attribute",
+      "operator": "contains" | "equals" | "exists",
+      "value": "<string>",
+      "key": "<attribute key>"?
+    },
+    ...
+  ]
 
-Example: --span-triggers '[{"span_name":"agent.run","attribute_filters":[]}]'\
+Use "field":"span_name" to match on span names; "field":"span_attribute" with "key":"<attr>" to match on a span attribute's value. Triggers are ANDed together — a span must match every entry to be evaluated.
+
+Example: --span-triggers '[{"field":"span_name","operator":"equals","value":"agent.run"}]'\
 """
 
 
@@ -198,8 +238,8 @@ COMMAND_HELP: dict[str, str] = {
         "\b\n"
         "Example: judgment automations create <PROJECT_ID> my-rule any \\\n"
         "  --description 'Alert on low relevance scores' \\\n"
-        "  --conditions '[{\"metric\":{\"type\":\"behavior\",\"behavior_id\":\"<BEHAVIOR_ID>\"},\"operator\":\"<\",\"threshold\":0.7}]' \\\n"
-        "  --actions '{\"slack\":[{\"channel\":\"#alerts\",\"webhook_url\":\"https://hooks.slack.com/...\"}]}' \\\n"
+        "  --conditions '[{\"metric\":{\"scorer_type\":\"behavior\",\"name\":\"Relevance\",\"threshold\":0.7},\"comparison\":\"lt\"}]' \\\n"
+        "  --actions '{\"notification\":{\"communication_methods\":[\"slack\"]}}' \\\n"
         "  --cooldown-period 5 --cooldown-period-unit minutes"
     ),
     "automations.update": (
@@ -259,11 +299,11 @@ COMMAND_HELP: dict[str, str] = {
     "judges.update-settings": (
         "Update a judge's online-evaluation configuration.\n"
         "\n"
-        "Applies to all behaviors backed by the judge. evaluation_mode selects whether the judge runs continuously or on demand; sampling_rate is a percentage (0-100) of qualifying spans to score. Requires the developer role.\n"
+        "Applies to all behaviors backed by the judge. EVALUATION_MODE selects whether the judge runs continuously on every matching span (\"continuous\") or only when explicitly invoked (\"on_demand\"); SAMPLING_RATE is a percentage (0-100) of qualifying spans to score. Requires the developer role.\n"
         "\n"
         "\b\n"
-        "Example: judgment judges update-settings <PROJECT_ID> <JUDGE_ID> sampled 10 \\\n"
-        "  --span-triggers '[{\"span_name\":\"agent.run\",\"attribute_filters\":[]}]'"
+        "Example: judgment judges update-settings <PROJECT_ID> <JUDGE_ID> continuous 10 \\\n"
+        "  --span-triggers '[{\"field\":\"span_name\",\"operator\":\"equals\",\"value\":\"agent.run\"}]'"
     ),
     "projects.create": (
         "Create a new project in your organization. Requires the developer role.\n"
