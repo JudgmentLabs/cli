@@ -1,9 +1,20 @@
 """Hand-written ``judgment judges`` commands.
 
-The ``judges`` group itself is auto-generated from the OpenAPI spec; the
-commands here (``upload``, ``init``) are attached to that group via
-``attach_to`` because they need behaviour the generator cannot express
-(multipart upload, local file scaffolding).
+The ``judges`` group itself is auto-generated from the OpenAPI spec. The
+commands defined here (``upload``, ``init``) cover behaviour the OpenAPI
+spec cannot express on its own:
+
+* ``upload`` — packages local Python source into a tar+gzip bundle and
+  posts it as multipart form data. The matching server route exists
+  (``judges.upload``) but is intentionally listed in
+  :data:`scripts.generate_cli.MANUAL_COMMANDS` so this implementation owns
+  the slot.
+* ``init`` — pure local scaffolder that writes a starter judge file. There
+  is no server endpoint for this command.
+
+Commands are attached directly to the auto-generated ``judges_group`` via
+the standard ``@judges_group.command(...)`` decorator — importing this
+module is enough to register them.
 """
 
 from __future__ import annotations
@@ -17,10 +28,11 @@ import click
 
 from judgment_cli import scorer_bundle
 from judgment_cli.client import JudgmentClient
+from judgment_cli.generated_commands import judges_group
 from judgment_cli.ui import error, output, success
 
 
-@click.command("upload")
+@judges_group.command("upload")
 @click.argument("entrypoint_path", type=click.Path(exists=True, dir_okay=False))
 @click.option(
     "-p",
@@ -202,7 +214,7 @@ _TEMPLATES = {
 }
 
 
-@click.command("init")
+@judges_group.command("init")
 @click.option(
     "-t",
     "--response-type",
@@ -274,9 +286,3 @@ def judges_init(
         )
     judge_path.write_text(_TEMPLATES[response_type].format(name=judge_name))
     success(f"Wrote {os.path.abspath(judge_path)}")
-
-
-def attach_to(judges_group: click.Group) -> None:
-    """Attach the hand-written judges commands to the auto-generated group."""
-    judges_group.add_command(judges_upload)
-    judges_group.add_command(judges_init)

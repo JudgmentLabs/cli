@@ -1,6 +1,6 @@
 """Build scorer upload bundles and detect scorer metadata from source.
 
-Used by ``judgment scorer upload`` to package an entrypoint Python file (plus
+Used by ``judgment judges upload`` to package an entrypoint Python file (plus
 optional requirements.txt and additional include paths) into a tar.gz, and to
 infer the scorer's class name and response type by parsing its AST.
 """
