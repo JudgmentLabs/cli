@@ -4,7 +4,7 @@
 Walks the registered ``judgment`` Click group, emits one MDX file per
 group (plus a short index), and writes the result to ``--out``. Run
 locally to preview, or from CI to publish into the docs repo's
-``content/docs/sdk-reference/cli/`` tree.
+``content/docs/cli-reference/`` tree.
 
 Source of truth lives in ``src/judgment_cli/main.py`` and
 ``src/judgment_cli/generated_commands.py``; this script is a thin
@@ -12,7 +12,7 @@ renderer that introspects ``Click.Command``/``Click.Group`` objects.
 
 Usage::
 
-    python scripts/generate_reference.py --out content/docs/sdk-reference/cli
+    python scripts/generate_reference.py --out content/docs/cli-reference
 """
 
 from __future__ import annotations
@@ -386,7 +386,7 @@ def _render_index(root: click.Group, group_files: list[tuple[str, str]]) -> str:
         cmd = root.commands[group_name]
         short = _strip_help(cmd.short_help) or _strip_help(cmd.help).split("\n")[0]
         parts.append(
-            f"| [`{group_name}`](/sdk-reference/cli/{slug}) "
+            f"| [`{group_name}`](/cli-reference/{slug}) "
             f"| {_escape_table_cell(short) or '—'} |"
         )
 
@@ -406,7 +406,18 @@ def _render_meta(group_files: list[tuple[str, str]], top_level_files: list[tuple
         for slug, _ in group_files:
             pages.append(slug)
 
-    return json.dumps({"title": "CLI", "pages": pages}, indent=2) + "\n"
+    return (
+        json.dumps(
+            {
+                "title": "CLI Reference",
+                "icon": "Terminal",
+                "root": True,
+                "pages": pages,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
 
 
 # ---------------------------------------------------------------------------
