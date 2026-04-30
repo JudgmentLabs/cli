@@ -11,6 +11,57 @@ from judgment_cli.ui import output as _output
 
 
 # ────────────────────────────────────────────────────────────────────
+# Group: agent-threads
+# ────────────────────────────────────────────────────────────────────
+
+
+@click.group("agent-threads")
+def agent_threads_group() -> None:
+    'List and inspect agent thread conversations (agent_search, rubric_builder, global_copilot).'
+
+
+@agent_threads_group.command("get")
+@click.argument("project_id")
+@click.argument("thread_id")
+@click.pass_context
+def agent_threads_get(ctx, project_id, thread_id):
+    'Get an agent thread.\n\n\x08\nGet one agent thread conversation, including its transcript, metadata, active run status, and timestamps.'
+    url = "/agent-threads/get"
+    body = {}
+    body["project_id"] = project_id
+    body["thread_id"] = thread_id
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@agent_threads_group.command("list")
+@click.argument("project_id")
+@click.option("--agent-kind", "agent_kind", default=None, type=click.Choice(['agent_search', 'rubric_builder', 'global_copilot']))
+@click.option("--judge-id", "judge_id", default=None, help='Restrict to threads associated with this judge.')
+@click.option("--limit", "limit", default=None, type=float, help='Maximum number of threads to return (1–100).')
+@click.option("--cursor-updated-at", "cursor_updated_at", default=None, help='Pagination cursor: `updated_at` value from a previous `next_cursor`.')
+@click.option("--cursor-thread-id", "cursor_thread_id", default=None, help='Pagination cursor: `thread_id` value from a previous `next_cursor`.')
+@click.pass_context
+def agent_threads_list(ctx, project_id, agent_kind, judge_id, limit, cursor_updated_at, cursor_thread_id):
+    "List agent thread conversations.\n\n\x08\nList the authenticated user's agent thread conversations in a project (agent_search, rubric_builder, global_copilot). Returns each thread's title, type, message count, active run status, and timestamps."
+    url = "/agent-threads/list"
+    body = {}
+    body["project_id"] = project_id
+    if agent_kind is not None:
+        body["agent_kind"] = agent_kind
+    if judge_id is not None:
+        body["judge_id"] = judge_id
+    if limit is not None:
+        body["limit"] = limit
+    if cursor_updated_at is not None:
+        body["cursor_updated_at"] = cursor_updated_at
+    if cursor_thread_id is not None:
+        body["cursor_thread_id"] = cursor_thread_id
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+# ────────────────────────────────────────────────────────────────────
 # Group: automations
 # ────────────────────────────────────────────────────────────────────
 
@@ -108,8 +159,8 @@ def automations_list(ctx, project_id):
 @click.option("--combine-type", "combine_type", default=None, type=click.Choice(['all', 'any']))
 @click.option("--actions", "actions", default=None, help='JSON object describing what happens when the automation fires. All top-level keys are optional — include only the actions you want configured.\n\n**Shape:**\n```\n{\n  "notification": {\n    "enabled": <bool>?,\n    "communication_methods": ["email" | "slack" | "pagerduty"],\n    "email_addresses": ["<addr>", ...]?,\n    "pagerduty_config": {"routing_key":"<key>","severity":"critical"|"error"|"warning"|"info"}?\n  }?,\n  "dataset_addition": {\n    "enabled": <bool>?,\n    "dataset_name": "<dataset>",\n    "metadata_fields": <any>?\n  }?,\n  "behavior_evaluation": {\n    "enabled": <bool>?,\n    "behavior_judge_names": ["<judge_name>", ...]\n  }?\n}\n```\n\nSlack notifications are configured per-organization in the Judgment UI; pass `"slack"` in `communication_methods` to use them.')
 @click.option("--active", "active", default=None, type=bool, help='Enable (true) or disable (false) the automation without modifying other fields.')
-@click.option("--cooldown-period", "cooldown_period", default=None, help='JSON 2-tuple `[period, unit]` describing the minimum wait between triggers. Pass null to clear the cooldown.\n\n**Shape:** `[<period:number>, <unit:"seconds"|"minutes"|"hours"|"days">]`\n\nExample: `[15, "minutes"]` (at least 15 min between triggers)')
-@click.option("--trigger-frequency", "trigger_frequency", default=None, help='JSON 3-tuple `[count, period, unit]` describing the rate-limit window. Pass null to disable frequency limiting.\n\n**Shape:** `[<max_trigger_count:number>, <period:number>, <unit:"seconds"|"minutes"|"hours"|"days">]`\n\nExample: `[5, 1, "hours"]` (max 5 triggers per 1 hour)')
+@click.option("--cooldown-period", "cooldown_period", default=None, help='JSON 2-tuple `[period, unit]` describing the minimum wait between triggers. Omit to leave unchanged.\n\n**Shape:** `[<period:number>, <unit:"seconds"|"minutes"|"hours"|"days">]`\n\nExample: `[15, "minutes"]` (at least 15 min between triggers)')
+@click.option("--trigger-frequency", "trigger_frequency", default=None, help='JSON 3-tuple `[count, period, unit]` describing the rate-limit window. Omit to leave unchanged.\n\n**Shape:** `[<max_trigger_count:number>, <period:number>, <unit:"seconds"|"minutes"|"hours"|"days">]`\n\nExample: `[5, 1, "hours"]` (max 5 triggers per 1 hour)')
 @click.pass_context
 def automations_update(ctx, project_id, rule_id, name, description, conditions, combine_type, actions, active, cooldown_period, trigger_frequency):
     'Update an automation.\n\n\x08\nUpdate an existing automation. All fields other than the IDs are optional — only supplied fields are applied. Use `active: true/false` to enable or disable without changing other fields. Requires the developer role.'
@@ -324,6 +375,70 @@ def judges_group() -> None:
     'View and manage judges and their online-evaluation settings.'
 
 
+@judges_group.command("create")
+@click.argument("project_id")
+@click.argument("name")
+@click.option("--judge-description", "judge_description", default=None, help='Human-readable description shown in the UI.')
+@click.option("--description", "description", default=None, help='Description stored on the underlying scorer version.')
+@click.argument("model")
+@click.argument("prompt")
+@click.option("--score-type", "score_type", required=True, type=click.Choice(['numeric', 'binary', 'categorical']))
+@click.option("--categories", "categories", default=None, help='List of `{name, description}` choices for `categorical` judges. Ignored for other score types.')
+@click.option("--min-score", "min_score", default=None, type=float, help='Lower bound for `numeric` judges. Defaults to 0.')
+@click.option("--max-score", "max_score", default=None, type=float, help='Upper bound for `numeric` judges. Defaults to 1.')
+@click.pass_context
+def judges_create(ctx, project_id, name, judge_description, description, model, prompt, score_type, categories, min_score, max_score):
+    'Create a prompt judge.\n\n\x08\nCreate a new prompt judge in a project. The judge runs the supplied prompt against the configured LLM model to score spans.'
+    url = "/judges/create"
+    body = {}
+    body["project_id"] = project_id
+    body["name"] = name
+    if judge_description is not None:
+        body["judge_description"] = judge_description
+    if description is not None:
+        body["description"] = description
+    body["model"] = model
+    body["prompt"] = prompt
+    body["score_type"] = score_type
+    if categories is not None:
+        body["categories"] = json.loads(categories)
+    if min_score is not None:
+        body["min_score"] = min_score
+    if max_score is not None:
+        body["max_score"] = max_score
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@judges_group.command("delete")
+@click.argument("project_id")
+@click.option("--judge-ids", "judge_ids", multiple=True, required=True, help='Judge UUIDs to delete.')
+@click.pass_context
+def judges_delete(ctx, project_id, judge_ids):
+    'Delete judges.\n\n\x08\nDelete one or more judges by ID. Behaviors that reference these judges are also removed.'
+    url = "/judges/delete"
+    body = {}
+    body["project_id"] = project_id
+    if judge_ids:
+        body["judge_ids"] = list(judge_ids)
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@judges_group.command("get")
+@click.argument("project_id")
+@click.argument("judge_id")
+@click.pass_context
+def judges_get(ctx, project_id, judge_id):
+    'Get a judge by ID.\n\n\x08\nReturn full detail (including all versions) for a single judge.'
+    url = "/judges/get"
+    body = {}
+    body["project_id"] = project_id
+    body["judge_id"] = judge_id
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
 @judges_group.command("get-settings")
 @click.argument("project_id")
 @click.argument("judge_id")
@@ -346,6 +461,93 @@ def judges_list(ctx, project_id):
     url = "/judges/list"
     body = {}
     body["project_id"] = project_id
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@judges_group.command("models")
+@click.pass_context
+def judges_models(ctx):
+    'List judge models.\n\n\x08\nList the chat models available for use as the LLM backing a prompt judge.'
+    url = "/judges/models"
+    result = ctx.obj["client"].request("GET", url)
+    _output(result)
+
+
+@judges_group.command("set-tag")
+@click.argument("project_id")
+@click.argument("judge_id")
+@click.option("--major-version", "major_version", required=True, type=float, help='Judge version to tag.')
+@click.option("--minor-version", "minor_version", required=True, type=float, help='Judge version to tag.')
+@click.argument("tag")
+@click.option("--action", "action", required=True, type=click.Choice(['add', 'remove']))
+@click.pass_context
+def judges_set_tag(ctx, project_id, judge_id, major_version, minor_version, tag, action):
+    'Add or remove a version tag on a judge.\n\n\x08\nAdd or remove a tag (e.g. `prod`) on a specific version of a judge. Use `action: "add"` to set the tag and `action: "remove"` to clear it.'
+    url = "/judges/set-tag"
+    body = {}
+    body["project_id"] = project_id
+    body["judge_id"] = judge_id
+    body["major_version"] = major_version
+    body["minor_version"] = minor_version
+    body["tag"] = tag
+    body["action"] = action
+    result = ctx.obj["client"].request("POST", url, json_body=body)
+    _output(result)
+
+
+@judges_group.command("update")
+@click.argument("project_id")
+@click.argument("judge_id")
+@click.option("--judge-description", "judge_description", default=None, help='New UI description (pass null to clear).')
+@click.option("--score-type", "score_type", default=None, type=click.Choice(['numeric', 'binary', 'categorical']))
+@click.option("--description", "description", default=None, help='New scorer-version description (pass null to clear).')
+@click.option("--model", "model", default=None, help='New LiteLLM model id. Use `list_judge_models` for available IDs.')
+@click.option("--prompt", "prompt", default=None, help='New prompt template.')
+@click.option("--categories", "categories", default=None, help='List of `{name, description}` choices for `categorical` judges. Ignored for other score types.')
+@click.option("--min-score", "min_score", default=None, type=float, help='Updated lower bound for `numeric` judges.')
+@click.option("--max-score", "max_score", default=None, type=float, help='Updated upper bound for `numeric` judges.')
+@click.option("--target-major-version", "target_major_version", default=None, type=float, help='Major version to write to. If it does not exist, a new version is created.')
+@click.option("--target-minor-version", "target_minor_version", default=None, type=float, help='Minor version to write to. If it does not exist, a new version is created.')
+@click.option("--source-major-version", "source_major_version", default=None, type=float, help='Major version to copy unspecified fields from. Defaults to the latest version.')
+@click.option("--source-minor-version", "source_minor_version", default=None, type=float, help='Minor version to copy unspecified fields from. Defaults to the latest version.')
+@click.option("--agent-prompts", "agent_prompts", default=None, help='For agent judges only: replacement list of named sub-prompts (`{name, prompt}`).')
+@click.option("--new-behaviors", "new_behaviors", default=None, help='New behaviors to attach to this judge. Each entry: `{value, description?, category_ids?}`.')
+@click.pass_context
+def judges_update(ctx, project_id, judge_id, judge_description, score_type, description, model, prompt, categories, min_score, max_score, target_major_version, target_minor_version, source_major_version, source_minor_version, agent_prompts, new_behaviors):
+    'Update a judge.\n\n\x08\nUpdate a judge — model, prompt, description, score type, categories, score bounds, agent prompts, or version tags. Pass `target_major_version`/`target_minor_version` to update a specific version; otherwise the latest version is updated.'
+    url = "/judges/update"
+    body = {}
+    body["project_id"] = project_id
+    body["judge_id"] = judge_id
+    if judge_description is not None:
+        body["judge_description"] = judge_description
+    if score_type is not None:
+        body["score_type"] = score_type
+    if description is not None:
+        body["description"] = description
+    if model is not None:
+        body["model"] = model
+    if prompt is not None:
+        body["prompt"] = prompt
+    if categories is not None:
+        body["categories"] = json.loads(categories)
+    if min_score is not None:
+        body["min_score"] = min_score
+    if max_score is not None:
+        body["max_score"] = max_score
+    if target_major_version is not None:
+        body["target_major_version"] = target_major_version
+    if target_minor_version is not None:
+        body["target_minor_version"] = target_minor_version
+    if source_major_version is not None:
+        body["source_major_version"] = source_major_version
+    if source_minor_version is not None:
+        body["source_minor_version"] = source_minor_version
+    if agent_prompts is not None:
+        body["agent_prompts"] = json.loads(agent_prompts)
+    if new_behaviors is not None:
+        body["new_behaviors"] = json.loads(new_behaviors)
     result = ctx.obj["client"].request("POST", url, json_body=body)
     _output(result)
 
@@ -455,7 +657,7 @@ def sessions_get(ctx, project_id, session_id):
 
 @sessions_group.command("search")
 @click.argument("project_id")
-@click.option("--filters", "filters", default=None, help='Filter expressions, ANDed together. Each item is `{"field":<field>,"op":<op>,"value":<value>}`. Allowed ops depend on the field\'s type.\n\n**Op groups:**\n- `STRING_OPS` = `=` | `!=` | `contains` | `does_not_contain`\n- `NUMERIC_OPS` = `=` | `!=` | `<` | `<=` | `>` | `>=`\n- `ARRAY_ANY` = `any` (matches when the row\'s array overlaps the supplied values)\n\n**String fields** (op in STRING_OPS, value is a string): `session_id`.\n\n**Numeric fields** (op in NUMERIC_OPS, value is a number): `trace_count`, `latency` (nanoseconds), `total_cost` (USD).\n\n**Array fields** (op = `any`, value is an array): `behaviors` (behavior UUIDs).')
+@click.option("--filters", "filters", required=True, help='Filter expressions, ANDed together. Each item is `{"field":<field>,"op":<op>,"value":<value>}`. Allowed ops depend on the field\'s type.\n\n**Op groups:**\n- `STRING_OPS` = `=` | `!=` | `contains` | `does_not_contain`\n- `NUMERIC_OPS` = `=` | `!=` | `<` | `<=` | `>` | `>=`\n- `ARRAY_ANY` = `any` (matches when the row\'s array overlaps the supplied values)\n\n**String fields** (op in STRING_OPS, value is a string): `session_id`.\n\n**Numeric fields** (op in NUMERIC_OPS, value is a number): `trace_count`, `latency` (nanoseconds), `total_cost` (USD).\n\n**Array fields** (op = `any`, value is an array): `behaviors` (behavior UUIDs).')
 @click.option("--time-range", "time_range", default=None, help='`{"start_time":<iso8601-string>|null,"end_time":<iso8601-string>|null}`. Either bound may be null to leave that side open. Invalid timestamps return 400.')
 @click.option("--pagination", "pagination", required=True, help='`{"limit":<int 1-200>,"cursorSortValue":<string>|null,"cursorItemId":<string>|null}`.\n\nFirst page: pass null for both cursor fields. Each response returns `nextCursor:{sort_value,session_id}` (or null when `hasMore=false`); copy those into `cursorSortValue` and `cursorItemId` for the next page.')
 @click.option("--sort-by", "sort_by", default=None, help='`{"field":<sort_field>,"direction":"asc"|"desc"}` where `sort_field` is one of: `created_at`, `num_traces`, `latency`, `llm_cost`. Default when omitted: `{"field":"created_at","direction":"desc"}`.')
@@ -465,8 +667,7 @@ def sessions_search(ctx, project_id, filters, time_range, pagination, sort_by):
     url = "/sessions/search"
     body = {}
     body["project_id"] = project_id
-    if filters is not None:
-        body["filters"] = json.loads(filters)
+    body["filters"] = json.loads(filters)
     if time_range is not None:
         body["time_range"] = json.loads(time_range)
     body["pagination"] = json.loads(pagination)
@@ -647,6 +848,7 @@ def traces_tags(ctx, project_id, trace_id):
 
 def register_commands(cli: click.Group) -> None:
     """Register all generated command groups on the root CLI."""
+    cli.add_command(agent_threads_group, "agent-threads")
     cli.add_command(automations_group, "automations")
     cli.add_command(behaviors_group, "behaviors")
     cli.add_command(docs_group, "docs")
