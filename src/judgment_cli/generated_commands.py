@@ -36,14 +36,14 @@ def agent_threads_get(ctx, project_id, thread_id):
 
 @agent_threads_group.command("list")
 @click.argument("project_id")
-@click.option("--agent-kind", "agent_kind", default=None, type=click.Choice(['agent_search', 'rubric_builder', 'global_copilot']))
+@click.option("--agent-kind", "agent_kind", default=None, type=click.Choice(['agent_search', 'rubric_builder', 'global_copilot', 'custom_agent']))
 @click.option("--judge-id", "judge_id", default=None, help='Restrict to threads associated with this judge.')
 @click.option("--limit", "limit", default=None, type=float, help='Maximum number of threads to return (1–100).')
 @click.option("--cursor-updated-at", "cursor_updated_at", default=None, help='Pagination cursor: `updated_at` value from a previous `next_cursor`.')
 @click.option("--cursor-thread-id", "cursor_thread_id", default=None, help='Pagination cursor: `thread_id` value from a previous `next_cursor`.')
 @click.pass_context
 def agent_threads_list(ctx, project_id, agent_kind, judge_id, limit, cursor_updated_at, cursor_thread_id):
-    "List agent thread conversations.\n\n\x08\nList the authenticated user's agent thread conversations in a project (agent_search, rubric_builder, global_copilot). Returns each thread's title, type, message count, active run status, and timestamps."
+    "List agent thread conversations.\n\n\x08\nList the authenticated user's agent thread conversations in a project (agent_search, rubric_builder, global_copilot, or custom_agent). Returns each thread's title, type, message count, active run status, and timestamps."
     url = "/agent-threads/list"
     body = {}
     body["project_id"] = project_id
