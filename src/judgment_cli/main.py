@@ -6,7 +6,7 @@ import click
 
 from judgment_cli import __version__
 from judgment_cli.client import JudgmentClient
-from judgment_cli import config, judges
+from judgment_cli import config
 from judgment_cli.generated_commands import register_commands
 from judgment_cli.ui import mask_key
 
@@ -145,7 +145,10 @@ def status() -> None:
 
 
 register_commands(cli)
-judges.attach_to(cli.commands["judges"])
+
+# Hand-written commands attach themselves to the auto-generated groups when
+# imported (see judgment_cli/judges.py). Importing for side effects only.
+from judgment_cli import judges  # noqa: E402, F401
 
 
 def main() -> None:
