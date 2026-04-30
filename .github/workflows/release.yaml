@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     outputs:
       new_version: ${{ steps.bump.outputs.new_version }}
 
@@ -79,29 +80,6 @@ jobs:
           git push origin main
           git push origin "v$new"
 
-      - name: Back-merge release commit to staging
-        # Keep `staging` in sync with `main` so the version files don't drift.
-        # Fast-forwards staging to the release commit; if non-fast-forward
-        # (someone landed on staging between the staging->main merge and now),
-        # fall back to opening a PR instead of force-pushing.
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          if git push origin main:staging; then
-            echo "Fast-forwarded staging to release commit."
-          else
-            echo "Non-fast-forward; opening a back-merge PR instead."
-            new=${{ steps.bump.outputs.new_version }}
-            branch="release-backmerge/v$new"
-            git checkout -b "$branch"
-            git push origin "$branch"
-            gh pr create \
-              --base staging \
-              --head "$branch" \
-              --title "Back-merge release v$new to staging" \
-              --body "Automated back-merge of the \`Release v$new\` commit from \`main\` to \`staging\` to keep the version files in sync."
-          fi
-
       - name: Render version-pinned installer
         run: |
           new=v${{ steps.bump.outputs.new_version }}
@@ -135,6 +113,26 @@ jobs:
             ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Back-merge release commit to staging
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git push origin main:staging; then
+            echo "Fast-forwarded staging to release commit."
+          else
+            echo "Non-fast-forward; opening a back-merge PR instead."
+            new=${{ steps.bump.outputs.new_version }}
+            branch="release-backmerge/v$new"
+            git checkout -b "$branch"
+            git push origin "$branch"
+            gh pr create \
+              --base staging \
+              --head "$branch" \
+              --title "Back-merge release v$new to staging" \
+              --body "Automated back-merge of the \`Release v$new\` commit from \`main\` to \`staging\` to keep the version files in sync."
+          fi
 
   homebrew:
     needs: release
