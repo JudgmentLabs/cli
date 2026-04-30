@@ -481,20 +481,21 @@ def generate_all(spec: dict) -> str:
 
     for gname in sorted(groups):
         desc = group_descriptions[gname]
+        gvar = py_var_name(gname)
         out += "\n"
         out += f"# {'─' * 68}\n"
         out += f"# Group: {gname}\n"
         out += f"# {'─' * 68}\n"
         out += "\n\n"
         out += f'@click.group("{gname}")\n'
-        out += f"def {gname}_group() -> None:\n"
+        out += f"def {gvar}_group() -> None:\n"
         out += f"    {_quote(desc)}\n"
 
         for entry in groups[gname]:
             out += "\n\n"
-            func_name = f"{gname}_{entry['command']}".replace("-", "_")
+            func_name = f"{gvar}_{entry['command']}".replace("-", "_")
             cmd_lines = generate_command_code(
-                group_name=gname,
+                group_name=gvar,
                 cmd_name=entry["command"],
                 func_name=func_name,
                 description=derive_description(
@@ -512,7 +513,8 @@ def generate_all(spec: dict) -> str:
     out += "def register_commands(cli: click.Group) -> None:\n"
     out += '    """Register all generated command groups on the root CLI."""\n'
     for gname in sorted(groups):
-        out += f'    cli.add_command({gname}_group, "{gname}")\n'
+        gvar = py_var_name(gname)
+        out += f'    cli.add_command({gvar}_group, "{gname}")\n'
 
     return out
 
