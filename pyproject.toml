@@ -26,7 +26,12 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "httpx",
+    "pytest>=7.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
 
 [project.scripts]
 judgment = "judgment_cli.main:main"
