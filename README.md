@@ -110,6 +110,14 @@ judgment behaviors get    <PROJECT_ID> <BEHAVIOR_ID>
 judgment judges settings  <PROJECT_ID> <JUDGE_ID>
 judgment automations list <PROJECT_ID>
 
+# Prompts
+judgment prompts list     <PROJECT_ID>
+judgment prompts get      <PROJECT_ID> <PROMPT_NAME> [--commit-id <SHA> | --tag <TAG>]
+judgment prompts versions <PROJECT_ID> <PROMPT_NAME>
+judgment prompts commit   <PROJECT_ID> <PROMPT_NAME> "<PROMPT_TEXT>" [--tags production --tags staging]
+judgment prompts tag      <PROJECT_ID> <PROMPT_NAME> <COMMIT_ID> --tags production
+judgment prompts untag    <PROJECT_ID> <PROMPT_NAME> --tags production
+
 # Docs
 judgment docs search "how do I instrument my app"
 judgment docs read   /docs/getting-started
