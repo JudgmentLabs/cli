@@ -462,7 +462,7 @@ def judges_list(ctx, project_id):
 @judges_group.command("models")
 @click.pass_context
 def judges_models(ctx):
-    'List judge models.\n\n\x08\nList the chat models available for use as the LLM backing a prompt judge.'
+    'List judge models.\n\n\x08\nList the models available for use as the LLM backing a judge.'
     url = "/judges/models"
     result = ctx.obj["client"].request("GET", url)
     _output(result)
