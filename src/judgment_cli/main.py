@@ -19,9 +19,11 @@ def cli(ctx: click.Context) -> None:
 
     Credentials are read from environment variables (JUDGMENT_API_KEY,
     JUDGMENT_BASE_URL) or the local config file written by `judgment login`.
-    Environment variables take precedence over the config file. Every command
-    that operates on organization-scoped resources accepts an
-    `--organization-id` option — run `judgment organizations list` to find it.
+    Environment variables take precedence over the config file. Most commands
+    that touch organization-scoped resources take ORGANIZATION_ID as the first
+    positional argument (for example ``judgment projects list <ORGANIZATION_ID>``).
+    Run ``judgment organizations list`` to find IDs. Hand-written commands may
+    differ; for instance ``judgment judges upload`` uses ``-o``/``--organization-id``.
     """
     ctx.ensure_object(dict)
     creds = config.resolve()
