@@ -2,7 +2,7 @@ name: Publish CLI Reference Docs
 
 on:
   push:
-    branches: [main]
+    branches: [staging]
     paths:
       - "src/judgment_cli/**"
       - "scripts/generate_reference.py"
