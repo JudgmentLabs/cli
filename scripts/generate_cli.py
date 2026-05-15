@@ -384,12 +384,15 @@ def generate_command_code(
                     f'@click.option("--{opt}", "{var}"{required_arg}, help={_quote(desc)})'
                 )
 
-    lines.append('@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")')
+    if is_table:
+        lines.append('@click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")')
+    else:
+        lines.append('@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")')
 
     lines.append("@click.pass_context")
 
     sig_parts = ["ctx"] + path_params + [py_var_name(q["name"]) for q in query_params]
-    sig_parts.append("json_output")
+    sig_parts.append("output_format")
     if method != "GET":
         sig_parts += [py_var_name(prop["name"]) for prop in body_props]
     lines.append(f"def {func_name}({', '.join(sig_parts)}):")
@@ -418,9 +421,9 @@ def generate_command_code(
             f'    result = ctx.obj["client"].request({", ".join(call_args)})'
         )
         if is_table:
-            lines.append("    _table_output(result, json_mode=json_output)")
+            lines.append("    _table_output(result, output_format=output_format)")
         else:
-            lines.append("    _yaml_output(result, json_mode=json_output)")
+            lines.append("    _yaml_output(result, output_format=output_format)")
         return lines
 
     lines.append("    body = {}")
@@ -446,9 +449,9 @@ def generate_command_code(
         f'    result = ctx.obj["client"].request("{method}", url, json_body=body)'
     )
     if is_table:
-        lines.append("    _table_output(result, json_mode=json_output)")
+        lines.append("    _table_output(result, output_format=output_format)")
     else:
-        lines.append("    _yaml_output(result, json_mode=json_output)")
+        lines.append("    _yaml_output(result, output_format=output_format)")
 
     return lines
 

@@ -23,16 +23,16 @@ def agent_threads_group() -> None:
 @agent_threads_group.command("get")
 @click.argument("project_id")
 @click.argument("thread_id")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def agent_threads_get(ctx, json_output, project_id, thread_id):
+def agent_threads_get(ctx, output_format, project_id, thread_id):
     'Get an agent thread.\n\n\x08\nGet one agent thread conversation, including its transcript, metadata, active run status, and timestamps.'
     url = "/agent-threads/get"
     body = {}
     body["project_id"] = project_id
     body["thread_id"] = thread_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @agent_threads_group.command("list")
@@ -42,9 +42,9 @@ def agent_threads_get(ctx, json_output, project_id, thread_id):
 @click.option("--limit", "limit", default=None, type=float, help='Maximum number of threads to return (1–100).')
 @click.option("--cursor-updated-at", "cursor_updated_at", default=None, help='Pagination cursor: `updated_at` value from a previous `next_cursor`.')
 @click.option("--cursor-thread-id", "cursor_thread_id", default=None, help='Pagination cursor: `thread_id` value from a previous `next_cursor`.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")
 @click.pass_context
-def agent_threads_list(ctx, json_output, project_id, agent_kind, judge_id, limit, cursor_updated_at, cursor_thread_id):
+def agent_threads_list(ctx, output_format, project_id, agent_kind, judge_id, limit, cursor_updated_at, cursor_thread_id):
     "List agent thread conversations.\n\n\x08\nList the authenticated user's agent thread conversations in a project (global_copilot or custom_agent). Returns each thread's title, type, message count, active run status, and timestamps."
     url = "/agent-threads/list"
     body = {}
@@ -60,7 +60,7 @@ def agent_threads_list(ctx, json_output, project_id, agent_kind, judge_id, limit
     if cursor_thread_id is not None:
         body["cursor_thread_id"] = cursor_thread_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _table_output(result, json_mode=json_output)
+    _table_output(result, output_format=output_format)
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -82,9 +82,9 @@ def automations_group() -> None:
 @click.option("--actions", "actions", default=None, help='JSON object describing what happens when the automation fires. All top-level keys are optional — include only the actions you want configured.\n\n**Shape:**\n```\n{\n  "notification": {\n    "enabled": <bool>?,\n    "communication_methods": ["email" | "slack" | "pagerduty"],\n    "email_addresses": ["<addr>", ...]?,\n    "pagerduty_config": {"routing_key":"<key>","severity":"critical"|"error"|"warning"|"info"}?\n  }?,\n  "dataset_addition": {\n    "enabled": <bool>?,\n    "dataset_name": "<dataset>",\n    "metadata_fields": <any>?\n  }?,\n  "behavior_evaluation": {\n    "enabled": <bool>?,\n    "behavior_judge_names": ["<judge_name>", ...]\n  }?\n}\n```\n\nSlack notifications are configured per-organization in the Judgment UI; pass `"slack"` in `communication_methods` to use them.')
 @click.option("--cooldown-period", "cooldown_period", default=None, help='JSON object describing the minimum wait between triggers. Omit to leave the cooldown unset; if provided, both `value` and `unit` are required.\n\n**Shape:** `{ "value": <number>, "unit": "seconds" | "minutes" | "hours" | "days" }`\n\nExample: `{ "value": 15, "unit": "minutes" }` (at least 15 min between triggers)')
 @click.option("--trigger-frequency", "trigger_frequency", default=None, help='JSON object describing the rate-limit window. Omit to leave unset; if provided, all three fields are required.\n\n**Shape:** `{ "count": <number>, "period": <number>, "period_unit": "seconds" | "minutes" | "hours" | "days" }`\n\nExample: `{ "count": 5, "period": 1, "period_unit": "hours" }` (max 5 triggers per 1 hour)')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def automations_create(ctx, json_output, project_id, name, description, conditions, combine_type, actions, cooldown_period, trigger_frequency):
+def automations_create(ctx, output_format, project_id, name, description, conditions, combine_type, actions, cooldown_period, trigger_frequency):
     'Create an automation.\n\n\x08\nCreate an automation (rule) in a project. An automation watches behavior/latency/cost metrics and fires actions when its conditions match. Requires the developer role.'
     url = "/automations/create"
     body = {}
@@ -101,50 +101,50 @@ def automations_create(ctx, json_output, project_id, name, description, conditio
     if trigger_frequency is not None:
         body["trigger_frequency"] = json.loads(trigger_frequency)
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @automations_group.command("delete")
 @click.argument("project_id")
 @click.argument("rule_id")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def automations_delete(ctx, json_output, project_id, rule_id):
+def automations_delete(ctx, output_format, project_id, rule_id):
     'Delete an automation.\n\n\x08\nDelete an automation. Requires the admin role.'
     url = "/automations/delete"
     body = {}
     body["project_id"] = project_id
     body["rule_id"] = rule_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @automations_group.command("get")
 @click.argument("project_id")
 @click.argument("rule_id")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def automations_get(ctx, json_output, project_id, rule_id):
+def automations_get(ctx, output_format, project_id, rule_id):
     """Get an automation by ID."""
     url = "/automations/detail"
     body = {}
     body["project_id"] = project_id
     body["rule_id"] = rule_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @automations_group.command("list")
 @click.argument("project_id")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")
 @click.pass_context
-def automations_list(ctx, json_output, project_id):
+def automations_list(ctx, output_format, project_id):
     """List automations."""
     url = "/automations/list"
     body = {}
     body["project_id"] = project_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _table_output(result, json_mode=json_output)
+    _table_output(result, output_format=output_format)
 
 
 @automations_group.command("update")
@@ -158,9 +158,9 @@ def automations_list(ctx, json_output, project_id):
 @click.option("--active", "active", default=None, type=bool, help='Enable (true) or disable (false) the automation without modifying other fields.')
 @click.option("--cooldown-period", "cooldown_period", default=None, help='JSON 2-tuple `[period, unit]` describing the minimum wait between triggers. Omit to leave unchanged.\n\n**Shape:** `[<period:number>, <unit:"seconds"|"minutes"|"hours"|"days">]`\n\nExample: `[15, "minutes"]` (at least 15 min between triggers)')
 @click.option("--trigger-frequency", "trigger_frequency", default=None, help='JSON 3-tuple `[count, period, unit]` describing the rate-limit window. Omit to leave unchanged.\n\n**Shape:** `[<max_trigger_count:number>, <period:number>, <unit:"seconds"|"minutes"|"hours"|"days">]`\n\nExample: `[5, 1, "hours"]` (max 5 triggers per 1 hour)')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def automations_update(ctx, json_output, project_id, rule_id, name, description, conditions, combine_type, actions, active, cooldown_period, trigger_frequency):
+def automations_update(ctx, output_format, project_id, rule_id, name, description, conditions, combine_type, actions, active, cooldown_period, trigger_frequency):
     'Update an automation.\n\n\x08\nUpdate an existing automation. All fields other than the IDs are optional — only supplied fields are applied. Use `active: true/false` to enable or disable without changing other fields. Requires the developer role.'
     url = "/automations/update"
     body = {}
@@ -183,7 +183,7 @@ def automations_update(ctx, json_output, project_id, rule_id, name, description,
     if trigger_frequency is not None:
         body["trigger_frequency"] = json.loads(trigger_frequency)
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -205,9 +205,9 @@ def behaviors_group() -> None:
 @click.option("--category-ids", "category_ids", multiple=True, help='UUIDs of categories to attach the behavior to. Pass an array of category UUIDs.')
 @click.option("--advanced-settings", "advanced_settings", default=None, help='JSON object overriding the judge\'s online-evaluation configuration. All four fields are required when this is supplied.\n\n**Shape:**\n```\n{\n  "online_evaluation_mode": "continuous" | "on_demand",\n  "online_sampling_rate": <number 0-100>,\n  "online_span_triggers": [\n    {"field":"span_name"|"span_attribute","operator":"contains"|"equals"|"exists","value":"<string>","key":"<attr-key>"?}\n  ],\n  "online_session_scoring": <bool>\n}\n```\n\n`continuous` runs the judge automatically on qualifying spans; `on_demand` requires a manual `judgment traces evaluate` call. `online_sampling_rate` is a percent (0–100) of matching spans to score.')
 @click.option("--judge-id", "judge_id", default=None, help='Attach the new behavior to an existing judge instead of creating one. The judge must be `score_type=binary` and have no existing behaviors.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def behaviors_create_binary(ctx, json_output, project_id, name, prompt, description, model, category_ids, advanced_settings, judge_id):
+def behaviors_create_binary(ctx, output_format, project_id, name, prompt, description, model, category_ids, advanced_settings, judge_id):
     'Create a binary (yes/no) behavior.\n\n\x08\nCreate a binary behavior. The judge LLM uses your prompt to decide true/false on each qualifying span.'
     url = "/behaviors/create-binary"
     body = {}
@@ -225,7 +225,7 @@ def behaviors_create_binary(ctx, json_output, project_id, name, prompt, descript
     if judge_id is not None:
         body["judge_id"] = judge_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @behaviors_group.command("create-classifier")
@@ -237,9 +237,9 @@ def behaviors_create_binary(ctx, json_output, project_id, name, prompt, descript
 @click.option("--category-ids", "category_ids", multiple=True, help='UUIDs of categories to attach the behavior to. Pass an array of category UUIDs.')
 @click.option("--advanced-settings", "advanced_settings", default=None, help='JSON object overriding the judge\'s online-evaluation configuration. All four fields are required when this is supplied.\n\n**Shape:**\n```\n{\n  "online_evaluation_mode": "continuous" | "on_demand",\n  "online_sampling_rate": <number 0-100>,\n  "online_span_triggers": [\n    {"field":"span_name"|"span_attribute","operator":"contains"|"equals"|"exists","value":"<string>","key":"<attr-key>"?}\n  ],\n  "online_session_scoring": <bool>\n}\n```\n\n`continuous` runs the judge automatically on qualifying spans; `on_demand` requires a manual `judgment traces evaluate` call. `online_sampling_rate` is a percent (0–100) of matching spans to score.')
 @click.option("--judge-id", "judge_id", default=None, help='Attach the new behavior to an existing judge instead of creating one. The judge must be `score_type=categorical` and have no existing behaviors.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def behaviors_create_classifier(ctx, json_output, project_id, name, prompt, options, model, category_ids, advanced_settings, judge_id):
+def behaviors_create_classifier(ctx, output_format, project_id, name, prompt, options, model, category_ids, advanced_settings, judge_id):
     'Create a classifier (multi-label) behavior.\n\n\x08\nCreate a classifier behavior. The judge LLM picks one of the supplied options for each qualifying span.'
     url = "/behaviors/create-classifier"
     body = {}
@@ -256,7 +256,7 @@ def behaviors_create_classifier(ctx, json_output, project_id, name, prompt, opti
     if judge_id is not None:
         body["judge_id"] = judge_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @behaviors_group.command("delete")
@@ -264,9 +264,9 @@ def behaviors_create_classifier(ctx, json_output, project_id, name, prompt, opti
 @click.argument("behavior_id")
 @click.option("--delete-scorer", "delete_scorer", default=None, type=bool, help='When true, also delete the underlying prompt scorer if no other behaviors reference it.')
 @click.option("--delete-all-values", "delete_all_values", default=None, type=bool, help='For classifier behaviors, when true deletes every category row for this judge (not just the provided behavior_id). Ignored for binary behaviors.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def behaviors_delete(ctx, json_output, project_id, behavior_id, delete_scorer, delete_all_values):
+def behaviors_delete(ctx, output_format, project_id, behavior_id, delete_scorer, delete_all_values):
     """Delete a behavior."""
     url = "/behaviors/delete"
     body = {}
@@ -277,7 +277,7 @@ def behaviors_delete(ctx, json_output, project_id, behavior_id, delete_scorer, d
     if delete_all_values is not None:
         body["delete_all_values"] = delete_all_values
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @behaviors_group.command("get")
@@ -285,9 +285,9 @@ def behaviors_delete(ctx, json_output, project_id, behavior_id, delete_scorer, d
 @click.argument("behavior_id")
 @click.option("--start-date", "start_date", default=None, help='Optional ISO 8601 start date for stats.')
 @click.option("--end-date", "end_date", default=None, help='Optional ISO 8601 end date for stats.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def behaviors_get(ctx, json_output, project_id, behavior_id, start_date, end_date):
+def behaviors_get(ctx, output_format, project_id, behavior_id, start_date, end_date):
     """Get a behavior with judge details and stats."""
     url = "/behaviors/detail"
     body = {}
@@ -298,29 +298,29 @@ def behaviors_get(ctx, json_output, project_id, behavior_id, start_date, end_dat
     if end_date is not None:
         body["end_date"] = end_date
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @behaviors_group.command("list")
 @click.argument("project_id")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")
 @click.pass_context
-def behaviors_list(ctx, json_output, project_id):
+def behaviors_list(ctx, output_format, project_id):
     'List behaviors.\n\n\x08\nList every behavior in a project along with rolled-up trace counts and last-seen stats.'
     url = "/behaviors/list"
     body = {}
     body["project_id"] = project_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _table_output(result, json_mode=json_output)
+    _table_output(result, output_format=output_format)
 
 
 @behaviors_group.command("update")
 @click.argument("project_id")
 @click.argument("behavior_id")
 @click.option("--description", "description", default=None, help='New human-readable description for the behavior.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def behaviors_update(ctx, json_output, project_id, behavior_id, description):
+def behaviors_update(ctx, output_format, project_id, behavior_id, description):
     """Update a behavior’s description."""
     url = "/behaviors/update"
     body = {}
@@ -329,7 +329,7 @@ def behaviors_update(ctx, json_output, project_id, behavior_id, description):
     if description is not None:
         body["description"] = description
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -344,23 +344,23 @@ def docs_group() -> None:
 
 @docs_group.command("get-page")
 @click.argument("path")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def docs_get_page(ctx, path, json_output):
+def docs_get_page(ctx, path, output_format):
     'Read a documentation page.\n\n\x08\nFetch the rendered text of a documentation page by its path. Use `docs.search` first to find candidate paths.'
     url = "/docs/page"
     params = {}
     params["path"] = path
     result = ctx.obj["client"].request("GET", url, params=params)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @docs_group.command("search")
 @click.argument("query")
 @click.option("--match-count", "match_count", default=None, type=float, help='Maximum results to return (1–20). Defaults to 8 when omitted.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")
 @click.pass_context
-def docs_search(ctx, json_output, query, match_count):
+def docs_search(ctx, output_format, query, match_count):
     'Search docs.\n\n\x08\nHybrid (vector + lexical) search over the public Judgment documentation. Returns the top matching headings with full URLs.'
     url = "/docs/search"
     body = {}
@@ -368,7 +368,7 @@ def docs_search(ctx, json_output, query, match_count):
     if match_count is not None:
         body["match_count"] = match_count
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _table_output(result, json_mode=json_output)
+    _table_output(result, output_format=output_format)
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -393,9 +393,9 @@ def judges_group() -> None:
 @click.option("--min-score", "min_score", default=None, type=float, help='Lower bound for `numeric` judges. Defaults to 0.')
 @click.option("--max-score", "max_score", default=None, type=float, help='Upper bound for `numeric` judges. Defaults to 1.')
 @click.option("--judge-type", "judge_type", default=None)
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def judges_create(ctx, json_output, project_id, name, judge_description, description, model, prompt, score_type, categories, min_score, max_score, judge_type):
+def judges_create(ctx, output_format, project_id, name, judge_description, description, model, prompt, score_type, categories, min_score, max_score, judge_type):
     'Create a prompt judge.\n\n\x08\nCreate a new prompt judge in a project. The judge runs the supplied prompt against the configured LLM model to score spans.'
     url = "/judges/create"
     body = {}
@@ -417,15 +417,15 @@ def judges_create(ctx, json_output, project_id, name, judge_description, descrip
     if judge_type is not None:
         body["judge_type"] = judge_type
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @judges_group.command("delete")
 @click.argument("project_id")
 @click.option("--judge-ids", "judge_ids", multiple=True, required=True, help='Judge UUIDs to delete.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def judges_delete(ctx, json_output, project_id, judge_ids):
+def judges_delete(ctx, output_format, project_id, judge_ids):
     'Delete judges.\n\n\x08\nDelete one or more judges by ID. Behaviors that reference these judges are also removed.'
     url = "/judges/delete"
     body = {}
@@ -433,60 +433,60 @@ def judges_delete(ctx, json_output, project_id, judge_ids):
     if judge_ids:
         body["judge_ids"] = list(judge_ids)
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @judges_group.command("get")
 @click.argument("project_id")
 @click.argument("judge_id")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def judges_get(ctx, json_output, project_id, judge_id):
+def judges_get(ctx, output_format, project_id, judge_id):
     'Get a judge by ID.\n\n\x08\nReturn full detail (including all versions) for a single judge.'
     url = "/judges/get"
     body = {}
     body["project_id"] = project_id
     body["judge_id"] = judge_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @judges_group.command("get-settings")
 @click.argument("project_id")
 @click.argument("judge_id")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def judges_get_settings(ctx, json_output, project_id, judge_id):
+def judges_get_settings(ctx, output_format, project_id, judge_id):
     """Get a judge’s online-evaluation settings."""
     url = "/judges/settings"
     body = {}
     body["project_id"] = project_id
     body["judge_id"] = judge_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @judges_group.command("list")
 @click.argument("project_id")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")
 @click.pass_context
-def judges_list(ctx, json_output, project_id):
+def judges_list(ctx, output_format, project_id):
     'List judges in a project.\n\n\x08\nList every judge in a project, including prompt, code, and custom (uploaded) judges. Returns each judge with its current configuration and online-evaluation settings.'
     url = "/judges/list"
     body = {}
     body["project_id"] = project_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _table_output(result, json_mode=json_output)
+    _table_output(result, output_format=output_format)
 
 
 @judges_group.command("models")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def judges_models(ctx, json_output):
+def judges_models(ctx, output_format):
     'List judge models.\n\n\x08\nList the models available for use as the LLM backing a judge.'
     url = "/judges/models"
     result = ctx.obj["client"].request("GET", url)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @judges_group.command("set-tag")
@@ -496,9 +496,9 @@ def judges_models(ctx, json_output):
 @click.option("--minor-version", "minor_version", required=True, type=float, help='Judge version to tag.')
 @click.argument("tag")
 @click.option("--action", "action", required=True, type=click.Choice(['add', 'remove']))
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def judges_set_tag(ctx, json_output, project_id, judge_id, major_version, minor_version, tag, action):
+def judges_set_tag(ctx, output_format, project_id, judge_id, major_version, minor_version, tag, action):
     'Add or remove a version tag on a judge.\n\n\x08\nAdd or remove a tag (e.g. `prod`) on a specific version of a judge. Use `action: "add"` to set the tag and `action: "remove"` to clear it.'
     url = "/judges/set-tag"
     body = {}
@@ -509,7 +509,7 @@ def judges_set_tag(ctx, json_output, project_id, judge_id, major_version, minor_
     body["tag"] = tag
     body["action"] = action
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @judges_group.command("update")
@@ -529,9 +529,9 @@ def judges_set_tag(ctx, json_output, project_id, judge_id, major_version, minor_
 @click.option("--source-minor-version", "source_minor_version", default=None, type=float, help='Minor version to copy unspecified fields from. Defaults to the latest version.')
 @click.option("--agent-prompts", "agent_prompts", default=None, help='For agent judges only: replacement list of named sub-prompts (`{name, prompt}`).')
 @click.option("--new-behaviors", "new_behaviors", default=None, help='New behaviors to attach to this judge. Each entry: `{value, description?, category_ids?}`.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def judges_update(ctx, json_output, project_id, judge_id, judge_description, score_type, description, model, prompt, categories, min_score, max_score, target_major_version, target_minor_version, source_major_version, source_minor_version, agent_prompts, new_behaviors):
+def judges_update(ctx, output_format, project_id, judge_id, judge_description, score_type, description, model, prompt, categories, min_score, max_score, target_major_version, target_minor_version, source_major_version, source_minor_version, agent_prompts, new_behaviors):
     'Update a judge.\n\n\x08\nUpdate a judge — model, prompt, description, score type, categories, score bounds, agent prompts, or version tags. Pass `target_major_version`/`target_minor_version` to update a specific version; otherwise the latest version is updated.'
     url = "/judges/update"
     body = {}
@@ -566,7 +566,7 @@ def judges_update(ctx, json_output, project_id, judge_id, judge_description, sco
     if new_behaviors is not None:
         body["new_behaviors"] = json.loads(new_behaviors)
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @judges_group.command("update-settings")
@@ -576,9 +576,9 @@ def judges_update(ctx, json_output, project_id, judge_id, judge_description, sco
 @click.option("--sampling-rate", "sampling_rate", required=True, type=float, help='Percent (0–100) of qualifying spans to score.')
 @click.option("--span-triggers", "span_triggers", default=None, help='JSON array of span filters that restrict which spans the judge evaluates. Pass `[]` to evaluate all spans.\n\n**Shape:**\n```\n[\n  {\n    "field": "span_name" | "span_attribute",\n    "operator": "contains" | "equals" | "exists",\n    "value": "<string>",\n    "key": "<attribute key>"?\n  },\n  ...\n]\n```\n\nUse `field: "span_name"` to match on span names; `field: "span_attribute"` with `key: "<attr>"` to match on a span attribute\'s value. Triggers are ANDed together — a span must match every entry to be evaluated.')
 @click.option("--session-scoring", "session_scoring", default=None, type=bool, help='When true, run the judge at session granularity instead of per-span.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def judges_update_settings(ctx, json_output, project_id, judge_id, evaluation_mode, sampling_rate, span_triggers, session_scoring):
+def judges_update_settings(ctx, output_format, project_id, judge_id, evaluation_mode, sampling_rate, span_triggers, session_scoring):
     'Update a judge’s online-evaluation settings.\n\n\x08\nUpdate how often and on which spans a judge runs online. Pass `evaluation_mode: continuous` with a sampling rate to evaluate automatically, or `on_demand` to require manual `judgment traces evaluate` calls.'
     url = "/judges/update-settings"
     body = {}
@@ -591,7 +591,7 @@ def judges_update_settings(ctx, json_output, project_id, judge_id, evaluation_mo
     if session_scoring is not None:
         body["session_scoring"] = session_scoring
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -606,51 +606,51 @@ def projects_group() -> None:
 
 @projects_group.command("add-favorite")
 @click.argument("project_id")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def projects_add_favorite(ctx, json_output, project_id):
+def projects_add_favorite(ctx, output_format, project_id):
     'Add project to favorites.\n\n\x08\nMark a project as a favorite for your user so it appears pinned in the UI.'
     url = "/projects/add-favorite"
     body = {}
     body["project_id"] = project_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @projects_group.command("create")
 @click.argument("project_name")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def projects_create(ctx, json_output, project_name):
+def projects_create(ctx, output_format, project_name):
     'Create project.\n\n\x08\nCreate a new project in your organization. Requires the developer role.'
     url = "/projects/create"
     body = {}
     body["project_name"] = project_name
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @projects_group.command("list")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")
 @click.pass_context
-def projects_list(ctx, json_output):
+def projects_list(ctx, output_format):
     'List projects.\n\n\x08\nList every project in your organization that you have access to.'
     url = "/projects"
     result = ctx.obj["client"].request("GET", url)
-    _table_output(result, json_mode=json_output)
+    _table_output(result, output_format=output_format)
 
 
 @projects_group.command("remove-favorite")
 @click.argument("project_id")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def projects_remove_favorite(ctx, json_output, project_id):
+def projects_remove_favorite(ctx, output_format, project_id):
     "Remove project from favorites.\n\n\x08\nRemove a project from your user's favorites."
     url = "/projects/remove-favorite"
     body = {}
     body["project_id"] = project_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -668,9 +668,9 @@ def prompts_group() -> None:
 @click.argument("prompt_name")
 @click.argument("prompt")
 @click.option("--tags", "tags", multiple=True, help='Optional tags (e.g. `production`, `staging`) to apply to the new commit. Tags move from any previous commit to this one.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def prompts_commit(ctx, json_output, project_id, prompt_name, prompt, tags):
+def prompts_commit(ctx, output_format, project_id, prompt_name, prompt, tags):
     'Commit a new prompt version.\n\n\x08\nAppend a new commit to a prompt. If the prompt does not yet exist it is created. Optionally apply tags to the new commit in the same call.'
     url = "/prompts/commit"
     body = {}
@@ -680,7 +680,7 @@ def prompts_commit(ctx, json_output, project_id, prompt_name, prompt, tags):
     if tags:
         body["tags"] = list(tags)
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @prompts_group.command("get")
@@ -688,9 +688,9 @@ def prompts_commit(ctx, json_output, project_id, prompt_name, prompt, tags):
 @click.argument("prompt_name")
 @click.option("--commit-id", "commit_id", default=None, help='Specific commit SHA to fetch. Mutually exclusive with `tag`. When neither is provided the latest commit is returned.')
 @click.option("--tag", "tag", default=None, help='Tag to fetch (e.g. `production`). Mutually exclusive with `commit_id`.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def prompts_get(ctx, json_output, project_id, prompt_name, commit_id, tag):
+def prompts_get(ctx, output_format, project_id, prompt_name, commit_id, tag):
     'Fetch a prompt commit.\n\n\x08\nFetch a prompt by name. By default returns the latest commit; pass `commit_id` to pin a specific commit, or `tag` to resolve a named tag (e.g. `production`).'
     url = "/prompts/get"
     body = {}
@@ -701,20 +701,20 @@ def prompts_get(ctx, json_output, project_id, prompt_name, commit_id, tag):
     if tag is not None:
         body["tag"] = tag
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @prompts_group.command("list")
 @click.argument("project_id")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")
 @click.pass_context
-def prompts_list(ctx, json_output, project_id):
+def prompts_list(ctx, output_format, project_id):
     'List prompts in a project.\n\n\x08\nList every prompt in a project with its latest commit timestamp and total version count.'
     url = "/prompts/list"
     body = {}
     body["project_id"] = project_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _table_output(result, json_mode=json_output)
+    _table_output(result, output_format=output_format)
 
 
 @prompts_group.command("tag")
@@ -722,9 +722,9 @@ def prompts_list(ctx, json_output, project_id):
 @click.argument("prompt_name")
 @click.argument("commit_id")
 @click.option("--tags", "tags", multiple=True, required=True, help='Tag names to add. Each tag is unique per prompt — re-tagging moves the tag to the new commit.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def prompts_tag(ctx, json_output, project_id, prompt_name, commit_id, tags):
+def prompts_tag(ctx, output_format, project_id, prompt_name, commit_id, tags):
     'Tag a prompt commit.\n\n\x08\nAttach one or more tags to a specific commit. Re-tagging moves the tag from any previous commit to the new one.'
     url = "/prompts/tag"
     body = {}
@@ -734,16 +734,16 @@ def prompts_tag(ctx, json_output, project_id, prompt_name, commit_id, tags):
     if tags:
         body["tags"] = list(tags)
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @prompts_group.command("untag")
 @click.argument("project_id")
 @click.argument("prompt_name")
 @click.option("--tags", "tags", multiple=True, required=True, help='Tag names to remove from this prompt.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def prompts_untag(ctx, json_output, project_id, prompt_name, tags):
+def prompts_untag(ctx, output_format, project_id, prompt_name, tags):
     'Remove tags from a prompt.\n\n\x08\nRemove one or more tags from a prompt. Returns the commit IDs that previously held the removed tags.'
     url = "/prompts/untag"
     body = {}
@@ -752,22 +752,22 @@ def prompts_untag(ctx, json_output, project_id, prompt_name, tags):
     if tags:
         body["tags"] = list(tags)
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @prompts_group.command("versions")
 @click.argument("project_id")
 @click.argument("prompt_name")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def prompts_versions(ctx, json_output, project_id, prompt_name):
+def prompts_versions(ctx, output_format, project_id, prompt_name):
     'List every commit of a prompt.\n\n\x08\nList every commit of a prompt in chronological order (newest first), including tags and authoring metadata.'
     url = "/prompts/versions"
     body = {}
     body["project_id"] = project_id
     body["prompt_name"] = prompt_name
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -783,16 +783,16 @@ def sessions_group() -> None:
 @sessions_group.command("get")
 @click.argument("project_id")
 @click.argument("session_id")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def sessions_get(ctx, json_output, project_id, session_id):
+def sessions_get(ctx, output_format, project_id, session_id):
     """Get session detail."""
     url = "/sessions/detail"
     body = {}
     body["project_id"] = project_id
     body["session_id"] = session_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @sessions_group.command("search")
@@ -801,9 +801,9 @@ def sessions_get(ctx, json_output, project_id, session_id):
 @click.option("--time-range", "time_range", default=None, help='`{"start_time":<iso8601-string>|null,"end_time":<iso8601-string>|null}`. Either bound may be null to leave that side open. Invalid timestamps return 400.')
 @click.option("--pagination", "pagination", required=True, help='`{"limit":<int 1-200>,"cursorSortValue":<string>|null,"cursorItemId":<string>|null}`.\n\nFirst page: pass null for both cursor fields. Each response returns `nextCursor:{sort_value,session_id}` (or null when `hasMore=false`); copy those into `cursorSortValue` and `cursorItemId` for the next page.')
 @click.option("--sort-by", "sort_by", default=None, help='`{"field":<sort_field>,"direction":"asc"|"desc"}` where `sort_field` is one of: `created_at`, `num_traces`, `latency`, `llm_cost`. Default when omitted: `{"field":"created_at","direction":"desc"}`.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")
 @click.pass_context
-def sessions_search(ctx, json_output, project_id, filters, time_range, pagination, sort_by):
+def sessions_search(ctx, output_format, project_id, filters, time_range, pagination, sort_by):
     'Search sessions.\n\n\x08\nFilter, sort, time-bound, and paginate sessions in a project.'
     url = "/sessions/search"
     body = {}
@@ -815,37 +815,37 @@ def sessions_search(ctx, json_output, project_id, filters, time_range, paginatio
     if sort_by is not None:
         body["sort_by"] = json.loads(sort_by)
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _table_output(result, json_mode=json_output)
+    _table_output(result, output_format=output_format)
 
 
 @sessions_group.command("trace-behaviors")
 @click.argument("project_id")
 @click.argument("session_id")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def sessions_trace_behaviors(ctx, json_output, project_id, session_id):
+def sessions_trace_behaviors(ctx, output_format, project_id, session_id):
     """List behaviors observed across a session’s traces."""
     url = "/sessions/trace-behaviors"
     body = {}
     body["project_id"] = project_id
     body["session_id"] = session_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @sessions_group.command("trace-ids")
 @click.argument("project_id")
 @click.argument("session_id")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def sessions_trace_ids(ctx, json_output, project_id, session_id):
+def sessions_trace_ids(ctx, output_format, project_id, session_id):
     """List trace IDs in a session."""
     url = "/sessions/trace-ids"
     body = {}
     body["project_id"] = project_id
     body["session_id"] = session_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -862,9 +862,9 @@ def traces_group() -> None:
 @click.argument("project_id")
 @click.argument("trace_id")
 @click.option("--tags", "tags", multiple=True, required=True, help='String tags to attach to the trace. Tags are additive — existing tags on the trace are preserved.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def traces_add_tags(ctx, json_output, project_id, trace_id, tags):
+def traces_add_tags(ctx, output_format, project_id, trace_id, tags):
     'Add tags to a trace.\n\n\x08\nAttach one or more string tags to an existing trace. Tags are additive — existing tags are preserved.'
     url = "/traces/add-tags"
     body = {}
@@ -873,22 +873,22 @@ def traces_add_tags(ctx, json_output, project_id, trace_id, tags):
     if tags:
         body["tags"] = list(tags)
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @traces_group.command("behaviors")
 @click.argument("project_id")
 @click.argument("trace_id")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def traces_behaviors(ctx, json_output, project_id, trace_id):
+def traces_behaviors(ctx, output_format, project_id, trace_id):
     """List behaviors observed on a trace."""
     url = "/traces/behaviors"
     body = {}
     body["project_id"] = project_id
     body["trace_id"] = trace_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @traces_group.command("evaluate")
@@ -896,9 +896,9 @@ def traces_behaviors(ctx, json_output, project_id, trace_id):
 @click.option("--evaluate-all", "evaluate_all", default=None, type=bool, help='When true, re-evaluate every trace in the project. Mutually exclusive with `trace_ids`.')
 @click.option("--trace-ids", "trace_ids", multiple=True, help='Trace UUIDs to re-evaluate. Mutually exclusive with `evaluate_all`.')
 @click.option("--specific-judge-names", "specific_judge_names", multiple=True, help='Restrict evaluation to judges with these names. Omit to run every applicable judge.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def traces_evaluate(ctx, json_output, project_id, evaluate_all, trace_ids, specific_judge_names):
+def traces_evaluate(ctx, output_format, project_id, evaluate_all, trace_ids, specific_judge_names):
     'Re-evaluate traces.\n\n\x08\nQueue traces for re-evaluation by the project’s judges. Pass `trace_ids` to re-evaluate specific traces, or `evaluate_all: true` to re-evaluate every trace in the project.'
     url = "/traces/evaluate"
     body = {}
@@ -910,22 +910,22 @@ def traces_evaluate(ctx, json_output, project_id, evaluate_all, trace_ids, speci
     if specific_judge_names:
         body["specific_judge_names"] = list(specific_judge_names)
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @traces_group.command("get")
 @click.argument("project_id")
 @click.argument("trace_id")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def traces_get(ctx, json_output, project_id, trace_id):
+def traces_get(ctx, output_format, project_id, trace_id):
     """Get a trace by ID."""
     url = "/traces/detail"
     body = {}
     body["project_id"] = project_id
     body["trace_id"] = trace_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @traces_group.command("search")
@@ -934,9 +934,9 @@ def traces_get(ctx, json_output, project_id, trace_id):
 @click.option("--sort-by", "sort_by", default=None, help='`{"field":<sort_field>,"direction":"asc"|"desc"}` where `sort_field` is one of: `created_at`, `span_name`, `duration`, `llm_cost`. Default when omitted: `{"field":"created_at","direction":"desc"}`. Any sort other than `created_at` desc requires `time_range.start_time` and a window between `start_time` and `end_time` of at most 7 days; use `created_at` desc sorting for broader ranges.')
 @click.option("--time-range", "time_range", default=None, help='`{"start_time":<iso8601-string>|null,"end_time":<iso8601-string>|null}`. Either bound may be null to leave that side open. Invalid timestamps return 400. For any sort other than `created_at` desc, `start_time` is required and the window between `start_time` and `end_time` must be at most 7 days.')
 @click.option("--pagination", "pagination", required=True, help='`{"limit":<int 1-200>,"cursorSortValue":<string>|null,"cursorItemId":<string>|null}`.\n\nFirst page: pass null for both cursor fields. Each response returns `nextCursor:{sort_value,trace_id}` (or null when `hasMore=false`); copy those into `cursorSortValue` and `cursorItemId` for the next page.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")
 @click.pass_context
-def traces_search(ctx, json_output, project_id, filters, sort_by, time_range, pagination):
+def traces_search(ctx, output_format, project_id, filters, sort_by, time_range, pagination):
     'Search traces.\n\n\x08\nFilter, sort, time-bound, and paginate traces in a project. See each body field for the exact JSON shape it expects.'
     url = "/traces/search"
     body = {}
@@ -949,52 +949,52 @@ def traces_search(ctx, json_output, project_id, filters, sort_by, time_range, pa
         body["time_range"] = json.loads(time_range)
     body["pagination"] = json.loads(pagination)
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _table_output(result, json_mode=json_output)
+    _table_output(result, output_format=output_format)
 
 
 @traces_group.command("span")
 @click.argument("project_id")
 @click.option("--spans", "spans", required=True, help='Up to 20 trace/span ID pairs to fetch span details for in a single request.')
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def traces_span(ctx, json_output, project_id, spans):
+def traces_span(ctx, output_format, project_id, spans):
     'Get span details.\n\n\x08\nFetch full details (inputs/outputs/attributes) for up to 20 specific spans across one or more traces.'
     url = "/traces/span"
     body = {}
     body["project_id"] = project_id
     body["spans"] = json.loads(spans)
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @traces_group.command("spans")
 @click.argument("project_id")
 @click.argument("trace_id")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def traces_spans(ctx, json_output, project_id, trace_id):
+def traces_spans(ctx, output_format, project_id, trace_id):
     """List a trace’s spans."""
     url = "/traces/spans"
     body = {}
     body["project_id"] = project_id
     body["trace_id"] = trace_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 @traces_group.command("tags")
 @click.argument("project_id")
 @click.argument("trace_id")
-@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")
+@click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
-def traces_tags(ctx, json_output, project_id, trace_id):
+def traces_tags(ctx, output_format, project_id, trace_id):
     """List a trace’s tags."""
     url = "/traces/tags"
     body = {}
     body["project_id"] = project_id
     body["trace_id"] = trace_id
     result = ctx.obj["client"].request("POST", url, json_body=body)
-    _yaml_output(result, json_mode=json_output)
+    _yaml_output(result, output_format=output_format)
 
 
 def register_commands(cli: click.Group) -> None:

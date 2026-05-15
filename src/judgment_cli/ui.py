@@ -17,10 +17,13 @@ def output(data: object) -> None:
     click.echo(json.dumps(data, indent=2, default=str))
 
 
-def table_output(data: object, *, json_mode: bool = False) -> None:
-    """Render list response as a table; fall back to JSON if --json or non-list."""
-    if json_mode:
+def table_output(data: object, *, output_format: str = "table") -> None:
+    """Render list response as table, yaml, or json based on --output flag."""
+    if output_format == "json":
         output(data)
+        return
+    if output_format == "yaml":
+        yaml_output(data)
         return
 
     items: list | None = None
@@ -57,8 +60,6 @@ def table_output(data: object, *, json_mode: bool = False) -> None:
 
 def _render_table(items: list[dict]) -> None:
     import io
-    import os
-    import subprocess
     from rich.console import Console
     from rich.table import Table
     import rich.box
@@ -66,7 +67,6 @@ def _render_table(items: list[dict]) -> None:
     def _is_scalar(v: object) -> bool:
         return v is None or isinstance(v, (str, int, float, bool))
 
-    # Only show columns where every item has a scalar (or null) value.
     all_cols = list(items[0].keys())
     cols = [c for c in all_cols if all(_is_scalar(item.get(c)) for item in items)]
     hidden = len(all_cols) - len(cols)
@@ -89,22 +89,27 @@ def _render_table(items: list[dict]) -> None:
         table.add_row(*row)
 
     if hidden:
-        table.caption = f"{hidden} nested column(s) hidden — use --json for full data"
+        table.caption = f"{hidden} nested column(s) hidden — use -o json for full data"
 
     buf = io.StringIO()
     Console(file=buf, force_terminal=True).print(table)
     rendered = buf.getvalue()
 
-    pager = os.environ.get("PAGER", "less")
+    import os
+    import subprocess
+    env = os.environ.copy()
+    env.setdefault("LESS", "FRX")
+    pager = env.get("PAGER", "less")
     try:
-        subprocess.run([pager, "-R", "-F", "-X"], input=rendered, text=True)
-    except (FileNotFoundError, OSError):
+        proc = subprocess.Popen(pager, shell=True, stdin=subprocess.PIPE, text=True, env=env)
+        proc.communicate(rendered)
+    except Exception:
         sys.stdout.write(rendered)
 
 
-def yaml_output(data: object, *, json_mode: bool = False) -> None:
-    """Render a single-item response as YAML; fall back to JSON if --json."""
-    if json_mode:
+def yaml_output(data: object, *, output_format: str = "yaml") -> None:
+    """Render response as YAML, or JSON if --output json."""
+    if output_format == "json":
         output(data)
         return
     import yaml
