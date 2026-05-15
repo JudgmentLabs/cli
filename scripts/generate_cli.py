@@ -321,6 +321,8 @@ def generate_command_code(
     query_params = extract_query_params(operation)
     body_props = extract_json_body_properties(operation)
 
+    is_table = cmd_name in ("list", "search")
+
     lines: list[str] = [f'@{group_name}_group.command("{cmd_name}")']
 
     for pp in path_params:
@@ -382,9 +384,12 @@ def generate_command_code(
                     f'@click.option("--{opt}", "{var}"{required_arg}, help={_quote(desc)})'
                 )
 
+    lines.append('@click.option("--json", "json_output", is_flag=True, default=False, help="Output raw JSON.")')
+
     lines.append("@click.pass_context")
 
     sig_parts = ["ctx"] + path_params + [py_var_name(q["name"]) for q in query_params]
+    sig_parts.append("json_output")
     if method != "GET":
         sig_parts += [py_var_name(prop["name"]) for prop in body_props]
     lines.append(f"def {func_name}({', '.join(sig_parts)}):")
@@ -412,7 +417,10 @@ def generate_command_code(
         lines.append(
             f'    result = ctx.obj["client"].request({", ".join(call_args)})'
         )
-        lines.append("    _output(result)")
+        if is_table:
+            lines.append("    _table_output(result, json_mode=json_output)")
+        else:
+            lines.append("    _yaml_output(result, json_mode=json_output)")
         return lines
 
     lines.append("    body = {}")
@@ -437,7 +445,10 @@ def generate_command_code(
     lines.append(
         f'    result = ctx.obj["client"].request("{method}", url, json_body=body)'
     )
-    lines.append("    _output(result)")
+    if is_table:
+        lines.append("    _table_output(result, json_mode=json_output)")
+    else:
+        lines.append("    _yaml_output(result, json_mode=json_output)")
 
     return lines
 
@@ -467,7 +478,7 @@ def generate_all(spec: dict) -> str:
 
         import click
 
-        from judgment_cli.ui import output as _output
+        from judgment_cli.ui import table_output as _table_output, yaml_output as _yaml_output
 
     """)
 

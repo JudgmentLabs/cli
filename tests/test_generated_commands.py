@@ -97,7 +97,7 @@ def project_id() -> str:
     traces" if no project has all three. This makes the suite portable
     across orgs — no project ID needs to be hard-coded.
     """
-    payload = _run("projects", "list")
+    payload = _run("projects", "list", "--json")
     assert isinstance(payload, dict)
     projects = payload.get("projects") or []
     if not projects:
@@ -124,8 +124,9 @@ def project_id() -> str:
             "[]",
             "--pagination",
             pagination,
+            "--json",
         )
-        threads = _run("agent-threads", "list", pid, "--limit", "1")
+        threads = _run("agent-threads", "list", pid, "--limit", "1", "--json")
         if (
             isinstance(sessions, dict)
             and (sessions.get("data") or [])
@@ -144,7 +145,7 @@ def trace_id(project_id: str) -> str:
     pagination = json.dumps(
         {"limit": 1, "cursorSortValue": None, "cursorItemId": None}
     )
-    payload = _run("traces", "search", project_id, "--pagination", pagination)
+    payload = _run("traces", "search", project_id, "--pagination", pagination, "--json")
     assert isinstance(payload, dict)
     traces = payload.get("data") or []
     if not traces:
@@ -157,7 +158,7 @@ def trace_id(project_id: str) -> str:
 @pytest.fixture(scope="session")
 def span_pair(project_id: str, trace_id: str) -> tuple[str, str]:
     """``(trace_id, span_id)`` for a real span — needed for ``traces span``."""
-    payload = _run("traces", "spans", project_id, trace_id)
+    payload = _run("traces", "spans", project_id, trace_id, "--json")
     spans = payload if isinstance(payload, list) else payload.get("spans") or payload.get("data") or []
     if not spans:
         pytest.skip(f"Trace {trace_id} has no spans.")
@@ -181,6 +182,7 @@ def session_id(project_id: str) -> str:
         "[]",
         "--pagination",
         pagination,
+        "--json",
     )
     assert isinstance(payload, dict)
     sessions = payload.get("data") or []
@@ -193,7 +195,7 @@ def session_id(project_id: str) -> str:
 
 @pytest.fixture(scope="session")
 def thread_id(project_id: str) -> str:
-    payload = _run("agent-threads", "list", project_id, "--limit", "1")
+    payload = _run("agent-threads", "list", project_id, "--limit", "1", "--json")
     assert isinstance(payload, dict)
     threads = payload.get("threads") or []
     if not threads:
@@ -230,14 +232,14 @@ def test_root_help_lists_every_group():
 
 def test_agent_threads_list(project_id: str):
     """Covers ``agent-threads list``."""
-    payload = _run("agent-threads", "list", project_id, "--limit", "5")
+    payload = _run("agent-threads", "list", project_id, "--limit", "5", "--json")
     assert isinstance(payload, dict)
     assert isinstance(payload.get("threads"), list)
 
 
 def test_agent_threads_get(project_id: str, thread_id: str):
     """Covers ``agent-threads get``."""
-    payload = _run("agent-threads", "get", project_id, thread_id)
+    payload = _run("agent-threads", "get", project_id, thread_id, "--json")
     assert isinstance(payload, dict)
     assert payload.get("id") == thread_id or payload.get("thread", {}).get("id") == thread_id or "messages" in payload or "transcript" in payload
 
@@ -249,7 +251,7 @@ def test_agent_threads_get(project_id: str, thread_id: str):
 
 def test_automations_list(project_id: str):
     """Covers ``automations list``."""
-    payload = _run("automations", "list", project_id)
+    payload = _run("automations", "list", project_id, "--json")
     assert isinstance(payload, dict)
     assert isinstance(payload.get("automations"), list)
 
@@ -270,6 +272,7 @@ def test_automations_lifecycle(project_id: str):
         conditions,
         "--combine-type",
         "all",
+        "--json",
     )
     rule_id = (
         (created.get("rule_id") if isinstance(created, dict) else None)
@@ -278,7 +281,7 @@ def test_automations_lifecycle(project_id: str):
     assert rule_id, f"could not extract rule_id from create response: {created!r}"
 
     try:
-        got = _run("automations", "get", project_id, rule_id)
+        got = _run("automations", "get", project_id, rule_id, "--json")
         assert isinstance(got, dict)
 
         updated = _run(
@@ -288,6 +291,7 @@ def test_automations_lifecycle(project_id: str):
             rule_id,
             "--description",
             "updated by cli e2e tests",
+            "--json",
         )
         assert isinstance(updated, dict)
     finally:
@@ -301,7 +305,7 @@ def test_automations_lifecycle(project_id: str):
 
 def test_behaviors_list(project_id: str):
     """Covers ``behaviors list``."""
-    payload = _run("behaviors", "list", project_id)
+    payload = _run("behaviors", "list", project_id, "--json")
     assert isinstance(payload, dict)
     assert isinstance(payload.get("behaviors"), list)
 
@@ -328,12 +332,13 @@ def test_behaviors_binary_lifecycle(project_id: str):
         "Is the response correct? Return true or false.",
         "--advanced-settings",
         _OFFLINE_SETTINGS,
+        "--json",
     )
     behavior_id = _extract_behavior_id(created)
     assert behavior_id, f"could not extract behavior id from {created!r}"
 
     try:
-        got = _run("behaviors", "get", project_id, behavior_id)
+        got = _run("behaviors", "get", project_id, behavior_id, "--json")
         assert isinstance(got, dict)
 
         updated = _run(
@@ -343,6 +348,7 @@ def test_behaviors_binary_lifecycle(project_id: str):
             behavior_id,
             "--description",
             "updated by cli e2e tests",
+            "--json",
         )
         assert isinstance(updated, dict)
     finally:
@@ -377,12 +383,13 @@ def test_behaviors_classifier_lifecycle(project_id: str):
         options,
         "--advanced-settings",
         _OFFLINE_SETTINGS,
+        "--json",
     )
     behavior_id = _extract_behavior_id(created)
     assert behavior_id, f"could not extract behavior id from {created!r}"
 
     try:
-        got = _run("behaviors", "get", project_id, behavior_id)
+        got = _run("behaviors", "get", project_id, behavior_id, "--json")
         assert isinstance(got, dict)
     finally:
         _run(
@@ -426,7 +433,7 @@ def _extract_behavior_id(response: object) -> str | None:
 
 def test_docs_search():
     """Covers ``docs search``."""
-    payload = _run("docs", "search", "getting started", "--match-count", "3")
+    payload = _run("docs", "search", "getting started", "--match-count", "3", "--json")
     assert isinstance(payload, dict)
     assert isinstance(payload.get("results"), list)
 
@@ -450,7 +457,7 @@ def test_docs_search():
 
 def test_judges_models():
     """Covers ``judges models``."""
-    payload = _run("judges", "models")
+    payload = _run("judges", "models", "--json")
     assert isinstance(payload, dict)
     assert isinstance(payload.get("models"), list)
     assert payload["models"], "expected at least one judge model"
@@ -458,7 +465,7 @@ def test_judges_models():
 
 def test_judges_list(project_id: str):
     """Covers ``judges list``."""
-    payload = _run("judges", "list", project_id)
+    payload = _run("judges", "list", project_id, "--json")
     assert isinstance(payload, dict)
     assert isinstance(payload.get("judges"), list)
 
@@ -467,7 +474,7 @@ def test_judges_lifecycle(project_id: str):
     """Covers ``judges create``, ``get``, ``get-settings``, ``update``,
     ``update-settings``, ``set-tag`` (add + remove), and ``delete``."""
     # Pick any available model so the create call succeeds.
-    models = _run("judges", "models").get("models")
+    models = _run("judges", "models", "--json").get("models")
     assert models, "no judge models available"
     model_id = models[0].get("id") or models[0].get("model_name") or models[0].get("name")
     assert model_id, f"no model id field on {models[0]!r}"
@@ -486,15 +493,16 @@ def test_judges_lifecycle(project_id: str):
         "0",
         "--max-score",
         "1",
+        "--json",
     )
     judge_id = _extract_judge_id(created)
     assert judge_id, f"could not extract judge id from {created!r}"
 
     try:
-        got = _run("judges", "get", project_id, judge_id)
+        got = _run("judges", "get", project_id, judge_id, "--json")
         assert isinstance(got, dict)
 
-        settings = _run("judges", "get-settings", project_id, judge_id)
+        settings = _run("judges", "get-settings", project_id, judge_id, "--json")
         assert isinstance(settings, dict)
 
         _run(
@@ -576,7 +584,7 @@ def _extract_judge_id(response: object) -> str | None:
 
 def test_projects_list():
     """Covers ``projects list``."""
-    payload = _run("projects", "list")
+    payload = _run("projects", "list", "--json")
     assert isinstance(payload, dict)
     assert isinstance(payload.get("projects"), list)
 
@@ -589,15 +597,15 @@ def test_projects_create_and_favorite():
     UI as needed (search for ``cli-e2e-project-`` prefix).
     """
     name = _unique("cli-e2e-project")
-    created = _run("projects", "create", name)
+    created = _run("projects", "create", name, "--json")
     assert isinstance(created, dict)
     project = created.get("project") or created
     new_pid = project.get("project_id") or project.get("id")
     assert new_pid, f"could not extract new project id from {created!r}"
 
-    fav = _run("projects", "add-favorite", new_pid)
+    fav = _run("projects", "add-favorite", new_pid, "--json")
     assert isinstance(fav, dict)
-    unfav = _run("projects", "remove-favorite", new_pid)
+    unfav = _run("projects", "remove-favorite", new_pid, "--json")
     assert isinstance(unfav, dict)
 
 
@@ -619,26 +627,27 @@ def test_sessions_search(project_id: str):
         "[]",
         "--pagination",
         pagination,
+        "--json",
     )
     assert isinstance(payload, dict)
 
 
 def test_sessions_get(project_id: str, session_id: str):
     """Covers ``sessions get``."""
-    payload = _run("sessions", "get", project_id, session_id)
+    payload = _run("sessions", "get", project_id, session_id, "--json")
     assert isinstance(payload, dict)
 
 
 def test_sessions_trace_ids(project_id: str, session_id: str):
     """Covers ``sessions trace-ids``."""
-    payload = _run("sessions", "trace-ids", project_id, session_id)
+    payload = _run("sessions", "trace-ids", project_id, session_id, "--json")
     assert isinstance(payload, dict)
     assert "trace_ids" in payload
 
 
 def test_sessions_trace_behaviors(project_id: str, session_id: str):
     """Covers ``sessions trace-behaviors``."""
-    payload = _run("sessions", "trace-behaviors", project_id, session_id)
+    payload = _run("sessions", "trace-behaviors", project_id, session_id, "--json")
     assert isinstance(payload, (dict, list))
 
 
@@ -653,20 +662,20 @@ def test_traces_search(project_id: str):
         {"limit": 5, "cursorSortValue": None, "cursorItemId": None}
     )
     payload = _run(
-        "traces", "search", project_id, "--pagination", pagination
+        "traces", "search", project_id, "--pagination", pagination, "--json"
     )
     assert isinstance(payload, dict)
 
 
 def test_traces_get(project_id: str, trace_id: str):
     """Covers ``traces get``."""
-    payload = _run("traces", "get", project_id, trace_id)
+    payload = _run("traces", "get", project_id, trace_id, "--json")
     assert isinstance(payload, dict)
 
 
 def test_traces_spans(project_id: str, trace_id: str):
     """Covers ``traces spans``."""
-    payload = _run("traces", "spans", project_id, trace_id)
+    payload = _run("traces", "spans", project_id, trace_id, "--json")
     assert isinstance(payload, (dict, list))
 
 
@@ -674,19 +683,19 @@ def test_traces_span(project_id: str, span_pair: tuple[str, str]):
     """Covers ``traces span``."""
     tid, sid = span_pair
     spans = json.dumps([{"trace_id": tid, "span_id": sid}])
-    payload = _run("traces", "span", project_id, "--spans", spans)
+    payload = _run("traces", "span", project_id, "--spans", spans, "--json")
     assert isinstance(payload, (dict, list))
 
 
 def test_traces_tags(project_id: str, trace_id: str):
     """Covers ``traces tags``."""
-    payload = _run("traces", "tags", project_id, trace_id)
+    payload = _run("traces", "tags", project_id, trace_id, "--json")
     assert isinstance(payload, (dict, list))
 
 
 def test_traces_behaviors(project_id: str, trace_id: str):
     """Covers ``traces behaviors``."""
-    payload = _run("traces", "behaviors", project_id, trace_id)
+    payload = _run("traces", "behaviors", project_id, trace_id, "--json")
     assert isinstance(payload, (dict, list))
 
 
@@ -697,7 +706,7 @@ def test_traces_add_tags(project_id: str, trace_id: str):
     the trace with churn-y test tags.
     """
     tag = _unique("cli-e2e-tag")
-    payload = _run("traces", "add-tags", project_id, trace_id, "--tags", tag)
+    payload = _run("traces", "add-tags", project_id, trace_id, "--tags", tag, "--json")
     assert isinstance(payload, (dict, list))
 
 
@@ -716,5 +725,6 @@ def test_traces_evaluate(project_id: str, trace_id: str):
         trace_id,
         "--specific-judge-names",
         "__cli_e2e_nonexistent_judge__",
+        "--json",
     )
     assert isinstance(payload, (dict, list, str))
