@@ -35,6 +35,13 @@ from judgment_cli.ui import error, output, success
 @judges_group.command("upload")
 @click.argument("entrypoint_path", type=click.Path(exists=True, dir_okay=False))
 @click.option(
+    "-o",
+    "--organization-id",
+    "organization_id",
+    required=True,
+    help="Organization ID that owns the target project.",
+)
+@click.option(
     "-p",
     "--project-id",
     "project_id",
@@ -80,6 +87,7 @@ from judgment_cli.ui import error, output, success
 def judges_upload(
     ctx: click.Context,
     entrypoint_path: str,
+    organization_id: str,
     project_id: str,
     requirements_path: str | None,
     include_paths: tuple[str, ...],
@@ -158,6 +166,7 @@ def judges_upload(
         "POST",
         "/judges/upload",
         data={
+            "organization_id": organization_id,
             "project_id": project_id,
             "metadata": json.dumps(metadata),
         },

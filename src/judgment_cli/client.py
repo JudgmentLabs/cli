@@ -10,20 +10,17 @@ import httpx
 
 
 class JudgmentClient:
-    __slots__ = ("base_url", "api_key", "organization_id", "_client")
+    __slots__ = ("base_url", "api_key", "_client")
 
-    def __init__(self, base_url: str, api_key: str, organization_id: str | None = None):
+    def __init__(self, base_url: str, api_key: str):
         self.base_url = base_url
         self.api_key = api_key
-        self.organization_id = organization_id
         self._client = httpx.Client(timeout=60, follow_redirects=True)
 
     def _auth_headers(self) -> dict[str, str]:
         headers: dict[str, str] = {}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
-        if self.organization_id:
-            headers["X-Organization-Id"] = self.organization_id
         return headers
 
     def request(
