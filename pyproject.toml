@@ -21,6 +21,8 @@ dependencies = [
     "httpx>=0.24",
     "pathspec>=0.11",
     "platformdirs>=4.0",
+    "rich>=13.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
