@@ -19,7 +19,6 @@ _APP_AUTHOR = "JudgmentLabs"
 class ResolvedCredentials(NamedTuple):
     base_url: str
     api_key: str
-    org_id: str | None
 
 
 def _config_dir() -> Path:
@@ -40,10 +39,8 @@ def load() -> dict[str, Any]:
         return {}
 
 
-def save(*, api_key: str, org_id: str | None = None, base_url: str | None = None) -> Path:
+def save(*, api_key: str, base_url: str | None = None) -> Path:
     data: dict[str, str] = {"api_key": api_key}
-    if org_id:
-        data["org_id"] = org_id
     if base_url and base_url != _DEFAULT_BASE_URL:
         data["base_url"] = base_url
     path = _config_path()
@@ -76,8 +73,4 @@ def resolve() -> ResolvedCredentials:
         or cfg.get("api_key")
         or ""
     )
-    org_id: str | None = (
-        optional_env_var("JUDGMENT_ORG_ID")
-        or cfg.get("org_id")
-    )
-    return ResolvedCredentials(base_url=base_url, api_key=api_key, org_id=org_id)
+    return ResolvedCredentials(base_url=base_url, api_key=api_key)

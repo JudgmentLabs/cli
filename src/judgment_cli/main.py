@@ -18,15 +18,18 @@ def cli(ctx: click.Context) -> None:
     """Judgment CLI — interact with the Judgment API from the command line.
 
     Credentials are read from environment variables (JUDGMENT_API_KEY,
-    JUDGMENT_BASE_URL, JUDGMENT_ORG_ID) or the local config file written by
-    `judgment login`. Environment variables take precedence over the config file.
+    JUDGMENT_BASE_URL) or the local config file written by `judgment login`.
+    Environment variables take precedence over the config file. Most commands
+    that touch organization-scoped resources take ORGANIZATION_ID as the first
+    positional argument (for example ``judgment projects list <ORGANIZATION_ID>``).
+    Run ``judgment organizations list`` to find IDs. Hand-written commands may
+    differ; for instance ``judgment judges upload`` uses ``-o``/``--organization-id``.
     """
     ctx.ensure_object(dict)
     creds = config.resolve()
     ctx.obj["client"] = JudgmentClient(
         base_url=creds.base_url.rstrip("/"),
         api_key=creds.api_key,
-        organization_id=creds.org_id,
     )
 
 
@@ -37,13 +40,10 @@ def cli(ctx: click.Context) -> None:
 def login() -> None:
     """Authenticate and store credentials locally."""
     api_key = click.prompt("API key", hide_input=True)
-    org_id = click.prompt("Organization ID", default="", show_default=False) or None
 
-    path = config.save(api_key=api_key, org_id=org_id)
+    path = config.save(api_key=api_key)
     click.echo(f"Credentials saved to {path}")
     click.echo(f"API key: {mask_key(api_key)}")
-    if org_id:
-        click.echo(f"Org ID:  {org_id}")
 
 
 @cli.command()
@@ -55,11 +55,9 @@ def configure() -> None:
     """
     cfg = config.load()
     api_key = _prompt_field("API key", cfg.get("api_key", ""), hide=True)
-    org_id = _prompt_field("Organization ID", cfg.get("org_id", ""))
 
     path = config.save(
         api_key=api_key,
-        org_id=org_id or None,
         base_url=cfg.get("base_url"),
     )
     click.echo(f"Credentials saved to {path}")
@@ -125,7 +123,6 @@ def status() -> None:
     sources = [
         ("Env", "JUDGMENT_API_KEY", os.environ.get("JUDGMENT_API_KEY", "")),
         ("Env", "JUDGMENT_BASE_URL", os.environ.get("JUDGMENT_BASE_URL", "")),
-        ("Env", "JUDGMENT_ORG_ID", os.environ.get("JUDGMENT_ORG_ID", "")),
         ("Config", str(config._config_path()), ""),
     ]
     for kind, name, val in sources:
