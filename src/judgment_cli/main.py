@@ -7,6 +7,7 @@ import click
 from judgment_cli import __version__
 from judgment_cli.client import JudgmentClient
 from judgment_cli import config
+from judgment_cli import credentials
 from judgment_cli.generated_commands import register_commands
 from judgment_cli.oauth import browser_login
 from judgment_cli.ui import mask_key
@@ -20,25 +21,13 @@ def cli(ctx: click.Context) -> None:
 
     Credentials are read from environment variables (JUDGMENT_API_KEY,
     JUDGMENT_BASE_URL) or the local config file written by `judgment login`.
-    Environment variables take precedence over the config file. Most commands
-    that touch organization-scoped resources take ORGANIZATION_ID as the first
-    positional argument (for example ``judgment projects list <ORGANIZATION_ID>``).
-    Run ``judgment organizations list`` to find IDs. Hand-written commands may
-    differ; for instance ``judgment judges upload`` uses ``-o``/``--organization-id``.
+    Environment variables take precedence over the config file.
     """
     ctx.ensure_object(dict)
-    creds = config.resolve()
+    resolved = credentials.resolve()
     ctx.obj["client"] = JudgmentClient(
-        base_url=creds.base_url.rstrip("/"),
-        bearer_token=creds.api_key,
-        refresh_token=creds.refresh_token,
-        expires_at=creds.expires_at,
-        auth_type=creds.auth_type,
-        token_updater=lambda tokens: config.update_oauth_tokens(
-            access_token=tokens.access_token,
-            refresh_token=tokens.refresh_token,
-            expires_at=tokens.expires_at,
-        ),
+        base_url=resolved.base_url,
+        credential=resolved.credential,
     )
 
 
@@ -59,11 +48,11 @@ def cli(ctx: click.Context) -> None:
 )
 def login(api_key_login: bool, no_browser: bool) -> None:
     """Authenticate and store credentials locally."""
-    creds = config.resolve()
+    base_url = config.resolve_base_url().rstrip("/")
 
     if api_key_login:
         api_key = click.prompt("API key", hide_input=True)
-        path = config.save(api_key=api_key, base_url=creds.base_url)
+        path = config.save(api_key=api_key)
         click.echo(f"Credentials saved to {path}")
         click.echo(f"API key: {mask_key(api_key)}")
         return
@@ -73,7 +62,7 @@ def login(api_key_login: bool, no_browser: bool) -> None:
     else:
         click.echo("Opening browser for Judgment login...")
     tokens = browser_login(
-        base_url=creds.base_url,
+        base_url=base_url,
         open_browser=not no_browser,
         on_authorize_url=click.echo if no_browser else None,
     )
@@ -81,7 +70,6 @@ def login(api_key_login: bool, no_browser: bool) -> None:
         access_token=tokens.access_token,
         refresh_token=tokens.refresh_token,
         expires_at=tokens.expires_at,
-        base_url=creds.base_url,
     )
     click.echo(f"Credentials saved to {path}")
     click.echo("Logged in with browser OAuth.")
@@ -97,10 +85,7 @@ def configure() -> None:
     cfg = config.load()
     api_key = _prompt_field("API key", cfg.get("api_key", ""), hide=True)
 
-    path = config.save(
-        api_key=api_key,
-        base_url=cfg.get("base_url"),
-    )
+    path = config.save(api_key=api_key)
     click.echo(f"Credentials saved to {path}")
 
 

@@ -4,71 +4,46 @@ from __future__ import annotations
 
 import json
 import sys
-import time
-from typing import Callable
 
 import click
 import httpx
-from judgment_cli.oauth import OAuthTokens, refresh_tokens
+from judgment_cli.credentials import Credential, CredentialRefreshError
 
 
 class JudgmentClient:
     __slots__ = (
         "base_url",
-        "bearer_token",
-        "refresh_token",
-        "expires_at",
-        "auth_type",
-        "token_updater",
+        "credential",
         "_client",
     )
 
     def __init__(
         self,
         base_url: str,
-        bearer_token: str,
-        *,
-        refresh_token: str = "",
-        expires_at: int | None = None,
-        auth_type: str = "api_key",
-        token_updater: Callable[[OAuthTokens], None] | None = None,
+        credential: Credential,
     ):
         self.base_url = base_url
-        self.bearer_token = bearer_token
-        self.refresh_token = refresh_token
-        self.expires_at = expires_at
-        self.auth_type = auth_type
-        self.token_updater = token_updater
+        self.credential = credential
         self._client = httpx.Client(timeout=60, follow_redirects=True)
 
     def _auth_headers(self) -> dict[str, str]:
-        self._refresh_if_needed()
         headers: dict[str, str] = {}
-        if self.bearer_token:
-            headers["Authorization"] = f"Bearer {self.bearer_token}"
+        self._apply_auth(headers)
         return headers
 
-    def _refresh_if_needed(self, *, force: bool = False) -> bool:
-        if self.auth_type != "oauth" or not self.refresh_token:
-            return False
-        if not force and self.expires_at and self.expires_at > int(time.time()) + 60:
-            return False
-
+    def _apply_auth(self, headers: dict[str, str]) -> None:
         try:
-            tokens = refresh_tokens(
-                base_url=self.base_url,
-                refresh_token=self.refresh_token,
-            )
-        except (httpx.HTTPError, RuntimeError, ValueError) as exc:
+            self.credential.apply(headers)
+        except CredentialRefreshError as exc:
             click.echo(f"Error: failed to refresh login ({exc})", err=True)
             sys.exit(1)
 
-        self.bearer_token = tokens.access_token
-        self.refresh_token = tokens.refresh_token
-        self.expires_at = tokens.expires_at
-        if self.token_updater:
-            self.token_updater(tokens)
-        return True
+    def _refresh_auth(self, *, force: bool = False) -> bool:
+        try:
+            return self.credential.refresh(force=force)
+        except CredentialRefreshError as exc:
+            click.echo(f"Error: failed to refresh login ({exc})", err=True)
+            sys.exit(1)
 
     def request(
         self,
@@ -122,8 +97,8 @@ class JudgmentClient:
             sys.exit(1)
 
         if r.status_code == 401 or r.status_code == 403:
-            if self._refresh_if_needed(force=True):
-                kwargs["headers"] = self._auth_headers()
+            if self._refresh_auth(force=True):
+                self._apply_auth(kwargs["headers"])
                 try:
                     r = self._client.request(method, url, **kwargs)
                 except httpx.RequestError as exc:
