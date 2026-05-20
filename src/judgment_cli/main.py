@@ -8,6 +8,7 @@ from judgment_cli import __version__
 from judgment_cli.client import JudgmentClient
 from judgment_cli import config
 from judgment_cli.generated_commands import register_commands
+from judgment_cli.oauth import browser_login
 from judgment_cli.ui import mask_key
 
 
@@ -29,7 +30,15 @@ def cli(ctx: click.Context) -> None:
     creds = config.resolve()
     ctx.obj["client"] = JudgmentClient(
         base_url=creds.base_url.rstrip("/"),
-        api_key=creds.api_key,
+        bearer_token=creds.api_key,
+        refresh_token=creds.refresh_token,
+        expires_at=creds.expires_at,
+        auth_type=creds.auth_type,
+        token_updater=lambda tokens: config.update_oauth_tokens(
+            access_token=tokens.access_token,
+            refresh_token=tokens.refresh_token,
+            expires_at=tokens.expires_at,
+        ),
     )
 
 
@@ -37,13 +46,45 @@ def cli(ctx: click.Context) -> None:
 
 
 @cli.command()
-def login() -> None:
+@click.option(
+    "--api-key",
+    "api_key_login",
+    is_flag=True,
+    help="Prompt for an API key instead of opening browser login.",
+)
+@click.option(
+    "--no-browser",
+    is_flag=True,
+    help="Print the authorization URL instead of opening a browser.",
+)
+def login(api_key_login: bool, no_browser: bool) -> None:
     """Authenticate and store credentials locally."""
-    api_key = click.prompt("API key", hide_input=True)
+    creds = config.resolve()
 
-    path = config.save(api_key=api_key)
+    if api_key_login:
+        api_key = click.prompt("API key", hide_input=True)
+        path = config.save(api_key=api_key, base_url=creds.base_url)
+        click.echo(f"Credentials saved to {path}")
+        click.echo(f"API key: {mask_key(api_key)}")
+        return
+
+    if no_browser:
+        click.echo("Open this URL in your browser to finish logging in:")
+    else:
+        click.echo("Opening browser for Judgment login...")
+    tokens = browser_login(
+        base_url=creds.base_url,
+        open_browser=not no_browser,
+        on_authorize_url=click.echo if no_browser else None,
+    )
+    path = config.save_oauth(
+        access_token=tokens.access_token,
+        refresh_token=tokens.refresh_token,
+        expires_at=tokens.expires_at,
+        base_url=creds.base_url,
+    )
     click.echo(f"Credentials saved to {path}")
-    click.echo(f"API key: {mask_key(api_key)}")
+    click.echo("Logged in with browser OAuth.")
 
 
 @cli.command()
@@ -130,7 +171,7 @@ def status() -> None:
             if cfg:
                 click.echo(f"  {kind:6s}  {name}")
                 for k, v in cfg.items():
-                    display = mask_key(v) if "key" in k else v
+                    display = mask_key(str(v)) if "key" in k or "token" in k else v
                     click.echo(f"          {k}: {display}")
             else:
                 click.echo(f"  {kind:6s}  {name}  (not found)")

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any, Iterator
 
 from platformdirs import user_config_dir
 
@@ -16,9 +17,17 @@ _APP_NAME = "judgment"
 _APP_AUTHOR = "JudgmentLabs"
 
 
-class ResolvedCredentials(NamedTuple):
+@dataclass(frozen=True)
+class ResolvedCredentials:
     base_url: str
     api_key: str
+    refresh_token: str = ""
+    expires_at: int | None = None
+    auth_type: str = "api_key"
+
+    def __iter__(self) -> Iterator[str]:
+        yield self.base_url
+        yield self.api_key
 
 
 def _config_dir() -> Path:
@@ -40,9 +49,47 @@ def load() -> dict[str, Any]:
 
 
 def save(*, api_key: str, base_url: str | None = None) -> Path:
-    data: dict[str, str] = {"api_key": api_key}
+    data: dict[str, str] = {"auth_type": "api_key", "api_key": api_key}
     if base_url and base_url != _DEFAULT_BASE_URL:
         data["base_url"] = base_url
+    return _write(data)
+
+
+def save_oauth(
+    *,
+    access_token: str,
+    refresh_token: str,
+    expires_at: int,
+    base_url: str | None = None,
+) -> Path:
+    data: dict[str, str | int] = {
+        "auth_type": "oauth",
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "expires_at": expires_at,
+    }
+    if base_url and base_url != _DEFAULT_BASE_URL:
+        data["base_url"] = base_url
+    return _write(data)
+
+
+def update_oauth_tokens(
+    *, access_token: str, refresh_token: str, expires_at: int
+) -> Path:
+    cfg = load()
+    cfg.update(
+        {
+            "auth_type": "oauth",
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "expires_at": expires_at,
+        }
+    )
+    cfg.pop("api_key", None)
+    return _write(cfg)
+
+
+def _write(data: dict[str, Any]) -> Path:
     path = _config_path()
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -71,6 +118,21 @@ def resolve() -> ResolvedCredentials:
     api_key: str = (
         optional_env_var("JUDGMENT_API_KEY")
         or cfg.get("api_key")
+        or cfg.get("access_token")
         or ""
     )
-    return ResolvedCredentials(base_url=base_url, api_key=api_key)
+    refresh_token = (
+        "" if optional_env_var("JUDGMENT_API_KEY") else cfg.get("refresh_token", "")
+    )
+    raw_expires_at = cfg.get("expires_at")
+    expires_at = raw_expires_at if isinstance(raw_expires_at, int) else None
+    auth_type = "api_key"
+    if not optional_env_var("JUDGMENT_API_KEY") and cfg.get("auth_type") == "oauth":
+        auth_type = "oauth"
+    return ResolvedCredentials(
+        base_url=base_url,
+        api_key=api_key,
+        refresh_token=refresh_token,
+        expires_at=expires_at,
+        auth_type=auth_type,
+    )

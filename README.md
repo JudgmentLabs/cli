@@ -38,8 +38,7 @@ pip install .
 
 ```bash
 judgment login
-# API key: ****
-# Organization ID (leave blank to skip): org-...
+# Opens your browser to authorize the CLI.
 ```
 
 Credentials are written atomically with `0600` permissions to a platform-appropriate config dir resolved via [`platformdirs`](https://pypi.org/project/platformdirs/):
@@ -58,6 +57,8 @@ Credentials are written atomically with `0600` permissions to a platform-appropr
 | 2        | Config file | `judgment login`                                         |
 
 ```bash
+judgment login --api-key  # manually store an API key instead
+judgment login --no-browser  # print the browser URL for remote shells
 judgment status   # show resolved sources
 judgment logout   # delete the credentials file
 ```
