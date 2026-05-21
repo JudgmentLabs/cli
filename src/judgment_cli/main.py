@@ -48,7 +48,7 @@ def cli(ctx: click.Context) -> None:
 )
 def login(api_key_login: bool, no_browser: bool) -> None:
     """Authenticate and store credentials locally."""
-    base_url = config.resolve_base_url().rstrip("/")
+    auth_url = config.resolve_auth_url().rstrip("/")
 
     if api_key_login:
         api_key = click.prompt("API key", hide_input=True)
@@ -62,7 +62,7 @@ def login(api_key_login: bool, no_browser: bool) -> None:
     else:
         click.echo("Opening browser for Judgment login...")
     tokens = browser_login(
-        base_url=base_url,
+        auth_url=auth_url,
         open_browser=not no_browser,
         on_authorize_url=click.echo if no_browser else None,
     )

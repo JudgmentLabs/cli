@@ -22,7 +22,13 @@ def test_save_api_key_clears_oauth_config(monkeypatch, tmp_path: Path) -> None:
 
 def test_resolve_base_url_prefers_env(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(config, "_config_dir", lambda: tmp_path)
-    config.save(api_key="manual-key", base_url="https://configured.example")
     monkeypatch.setenv("JUDGMENT_BASE_URL", "https://env.example")
 
     assert config.resolve_base_url() == "https://env.example"
+
+
+def test_resolve_auth_url_prefers_env(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(config, "_config_dir", lambda: tmp_path)
+    monkeypatch.setenv("JUDGMENT_AUTH_URL", "https://auth-env.example")
+
+    assert config.resolve_auth_url() == "https://auth-env.example"

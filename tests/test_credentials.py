@@ -61,8 +61,8 @@ def test_resolve_uses_oauth_config(monkeypatch, tmp_path) -> None:
 def test_oauth_credential_refreshes_expired_token(monkeypatch) -> None:
     refreshed: list[OAuthTokens] = []
 
-    def fake_refresh_tokens(*, base_url: str, refresh_token: str) -> OAuthTokens:
-        assert base_url == "https://cli.example"
+    def fake_refresh_tokens(*, auth_url: str, refresh_token: str) -> OAuthTokens:
+        assert auth_url == "https://auth.example"
         assert refresh_token == "old-refresh"
         return OAuthTokens(
             access_token="new-access",
@@ -72,7 +72,7 @@ def test_oauth_credential_refreshes_expired_token(monkeypatch) -> None:
 
     monkeypatch.setattr("judgment_cli.credentials.refresh_tokens", fake_refresh_tokens)
     credential = OAuthCredential(
-        base_url="https://cli.example",
+        auth_url="https://auth.example",
         access_token="old-access",
         refresh_token="old-refresh",
         expires_at=1,
@@ -90,12 +90,12 @@ def test_oauth_credential_refreshes_expired_token(monkeypatch) -> None:
 def test_oauth_credential_refresh_parse_error_is_wrapped(monkeypatch) -> None:
     monkeypatch.setattr(
         "judgment_cli.credentials.refresh_tokens",
-        lambda *, base_url, refresh_token: (_ for _ in ()).throw(
+        lambda *, auth_url, refresh_token: (_ for _ in ()).throw(
             RuntimeError("OAuth response missing access_token")
         ),
     )
     credential = OAuthCredential(
-        base_url="https://cli.example",
+        auth_url="https://auth.example",
         access_token="old-access",
         refresh_token="old-refresh",
         expires_at=1,

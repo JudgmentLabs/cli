@@ -12,6 +12,7 @@ from platformdirs import user_config_dir
 from judgment_cli.env import optional_env_var
 
 DEFAULT_BASE_URL = "https://cli.judgmentlabs.ai"
+DEFAULT_AUTH_URL = "https://auth.judgmentlabs.ai"
 _APP_NAME = "judgment"
 _APP_AUTHOR = "JudgmentLabs"
 
@@ -90,3 +91,8 @@ def clear() -> bool:
 def resolve_base_url() -> str:
     """Resolve the API base URL from env or the default."""
     return optional_env_var("JUDGMENT_BASE_URL") or DEFAULT_BASE_URL
+
+
+def resolve_auth_url() -> str:
+    """Resolve the OAuth server URL from env or the default."""
+    return optional_env_var("JUDGMENT_AUTH_URL") or DEFAULT_AUTH_URL

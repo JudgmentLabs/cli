@@ -37,9 +37,9 @@ def code_challenge(verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
 
-def refresh_tokens(*, base_url: str, refresh_token: str) -> OAuthTokens:
+def refresh_tokens(*, auth_url: str, refresh_token: str) -> OAuthTokens:
     response = httpx.post(
-        f"{base_url.rstrip('/')}/oauth/token",
+        f"{auth_url.rstrip('/')}/oauth/token",
         data={
             "grant_type": "refresh_token",
             "client_id": CLIENT_ID,
@@ -53,7 +53,7 @@ def refresh_tokens(*, base_url: str, refresh_token: str) -> OAuthTokens:
 
 def browser_login(
     *,
-    base_url: str,
+    auth_url: str,
     open_browser: bool = True,
     on_authorize_url: Callable[[str], None] | None = None,
 ) -> OAuthTokens:
@@ -73,7 +73,7 @@ def browser_login(
             "state": state,
         }
     )
-    authorize_url = f"{base_url.rstrip('/')}/oauth/authorize?{authorize_query}"
+    authorize_url = f"{auth_url.rstrip('/')}/oauth/authorize?{authorize_query}"
 
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -94,7 +94,7 @@ def browser_login(
             raise RuntimeError("OAuth callback did not include a code")
 
         response = httpx.post(
-            f"{base_url.rstrip('/')}/oauth/token",
+            f"{auth_url.rstrip('/')}/oauth/token",
             data={
                 "grant_type": "authorization_code",
                 "client_id": CLIENT_ID,

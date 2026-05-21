@@ -69,7 +69,7 @@ class ApiKeyCredential:
 
 class OAuthCredential:
     __slots__ = (
-        "_base_url",
+        "_auth_url",
         "_access_token",
         "_refresh_token",
         "_expires_at",
@@ -79,13 +79,13 @@ class OAuthCredential:
     def __init__(
         self,
         *,
-        base_url: str,
+        auth_url: str,
         access_token: str,
         refresh_token: str,
         expires_at: int | None = None,
         token_updater: Callable[[OAuthTokens], None] | None = None,
     ):
-        self._base_url = base_url
+        self._auth_url = auth_url
         self._access_token = access_token
         self._refresh_token = refresh_token
         self._expires_at = expires_at
@@ -96,12 +96,12 @@ class OAuthCredential:
         return self._refresh_token
 
     @classmethod
-    def from_config(cls, cfg: dict, base_url: str) -> "OAuthCredential | None":
+    def from_config(cls, cfg: dict, auth_url: str) -> "OAuthCredential | None":
         if cfg.get("auth_type") != "oauth":
             return None
         raw_expires_at = cfg.get("expires_at")
         return cls(
-            base_url=base_url,
+            auth_url=auth_url,
             access_token=str(cfg.get("access_token", "")),
             refresh_token=str(cfg.get("refresh_token", "")),
             expires_at=raw_expires_at if isinstance(raw_expires_at, int) else None,
@@ -128,7 +128,7 @@ class OAuthCredential:
 
         try:
             tokens = refresh_tokens(
-                base_url=self._base_url,
+                auth_url=self._auth_url,
                 refresh_token=self._refresh_token,
             )
         except (httpx.HTTPError, RuntimeError, ValueError) as exc:
@@ -151,9 +151,10 @@ def resolve() -> ResolvedCredential:
     """Resolve the credential using precedence: env > config file > empty."""
     cfg = config.load()
     base_url = config.resolve_base_url().rstrip("/")
+    auth_url = config.resolve_auth_url().rstrip("/")
     credential: Credential = (
         ApiKeyCredential.from_env()
-        or OAuthCredential.from_config(cfg, base_url)
+        or OAuthCredential.from_config(cfg, auth_url)
         or ApiKeyCredential.from_config(cfg)
         or ApiKeyCredential("")
     )
