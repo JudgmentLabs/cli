@@ -17,16 +17,12 @@ _APP_NAME = "judgment"
 _APP_AUTHOR = "JudgmentLabs"
 
 
-def _config_dir() -> Path:
-    return Path(user_config_dir(_APP_NAME, _APP_AUTHOR))
-
-
-def _config_path() -> Path:
-    return _config_dir() / "credentials.json"
+def credentials_path() -> Path:
+    return Path(user_config_dir(_APP_NAME, _APP_AUTHOR)) / "credentials.json"
 
 
 def load() -> dict[str, Any]:
-    path = _config_path()
+    path = credentials_path()
     if not path.exists():
         return {}
     try:
@@ -72,7 +68,7 @@ def update_oauth_tokens(
 
 
 def _write(data: dict[str, Any]) -> Path:
-    path = _config_path()
+    path = credentials_path()
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
@@ -81,7 +77,7 @@ def _write(data: dict[str, Any]) -> Path:
 
 
 def clear() -> bool:
-    path = _config_path()
+    path = credentials_path()
     if path.exists():
         path.unlink()
         return True

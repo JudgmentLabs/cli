@@ -11,9 +11,6 @@ class RotatingCredential:
         self.token = "old-access"
         self.refresh_count = 0
 
-    def get_token(self):
-        raise NotImplementedError
-
     def apply(self, headers: dict[str, str]) -> None:
         headers["Authorization"] = f"Bearer {self.token}"
 

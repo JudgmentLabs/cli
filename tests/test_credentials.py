@@ -25,7 +25,9 @@ def test_api_key_credential_applies_bearer_header() -> None:
 def test_resolve_prefers_env_api_key_over_oauth_config(
     monkeypatch, tmp_path
 ) -> None:
-    monkeypatch.setattr(config, "_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        config, "credentials_path", lambda: tmp_path / "credentials.json"
+    )
     config.save_oauth(
         access_token="oauth-access",
         refresh_token="oauth-refresh",
@@ -42,7 +44,9 @@ def test_resolve_prefers_env_api_key_over_oauth_config(
 
 
 def test_resolve_uses_oauth_config(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr(config, "_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        config, "credentials_path", lambda: tmp_path / "credentials.json"
+    )
     monkeypatch.delenv("JUDGMENT_API_KEY", raising=False)
     config.save_oauth(
         access_token="oauth-access",
@@ -58,8 +62,10 @@ def test_resolve_uses_oauth_config(monkeypatch, tmp_path) -> None:
     assert headers["Authorization"] == "Bearer oauth-access"
 
 
-def test_oauth_credential_refreshes_expired_token(monkeypatch) -> None:
-    refreshed: list[OAuthTokens] = []
+def test_oauth_credential_refreshes_expired_token(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(
+        config, "credentials_path", lambda: tmp_path / "credentials.json"
+    )
 
     def fake_refresh_tokens(*, auth_url: str, refresh_token: str) -> OAuthTokens:
         assert auth_url == "https://auth.example"
@@ -76,7 +82,6 @@ def test_oauth_credential_refreshes_expired_token(monkeypatch) -> None:
         access_token="old-access",
         refresh_token="old-refresh",
         expires_at=1,
-        token_updater=refreshed.append,
     )
     headers: dict[str, str] = {}
 
@@ -84,7 +89,35 @@ def test_oauth_credential_refreshes_expired_token(monkeypatch) -> None:
 
     assert headers["Authorization"] == "Bearer new-access"
     assert credential.refresh_token == "new-refresh"
-    assert refreshed and refreshed[0].access_token == "new-access"
+
+
+def test_oauth_credential_refresh_persists_tokens(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(
+        config, "credentials_path", lambda: tmp_path / "credentials.json"
+    )
+    config.save_oauth(
+        access_token="old-access",
+        refresh_token="old-refresh",
+        expires_at=1,
+    )
+
+    monkeypatch.setattr(
+        "judgment_cli.credentials.refresh_tokens",
+        lambda *, auth_url, refresh_token: OAuthTokens(
+            access_token="new-access",
+            refresh_token="new-refresh",
+            expires_at=1234,
+        ),
+    )
+
+    credential = OAuthCredential.from_config(config.load(), "https://auth.example")
+    assert credential is not None
+    credential.refresh()
+
+    saved = config.load()
+    assert saved["access_token"] == "new-access"
+    assert saved["refresh_token"] == "new-refresh"
+    assert saved["expires_at"] == 1234
 
 
 def test_oauth_credential_refresh_parse_error_is_wrapped(monkeypatch) -> None:

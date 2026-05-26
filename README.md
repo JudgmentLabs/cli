@@ -53,7 +53,7 @@ Credentials are written atomically with `0600` permissions to a platform-appropr
 
 | Priority | Method      | Example                                                  |
 |----------|-------------|----------------------------------------------------------|
-| 1        | Env vars    | `JUDGMENT_API_KEY`, `JUDGMENT_ORG_ID`, `JUDGMENT_BASE_URL` |
+| 1        | Env vars    | `JUDGMENT_API_KEY`, `JUDGMENT_ORG_ID`, `JUDGMENT_BASE_URL`, `JUDGMENT_AUTH_URL` |
 | 2        | Config file | `judgment login`                                         |
 
 ```bash

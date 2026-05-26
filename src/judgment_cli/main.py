@@ -20,8 +20,8 @@ def cli(ctx: click.Context) -> None:
     """Judgment CLI — interact with the Judgment API from the command line.
 
     Credentials are read from environment variables (JUDGMENT_API_KEY,
-    JUDGMENT_BASE_URL) or the local config file written by `judgment login`.
-    Environment variables take precedence over the config file.
+    JUDGMENT_BASE_URL, JUDGMENT_AUTH_URL) or the local config file written by
+    `judgment login`. Environment variables take precedence over the config file.
     """
     ctx.ensure_object(dict)
     resolved = credentials.resolve()
@@ -149,7 +149,8 @@ def status() -> None:
     sources = [
         ("Env", "JUDGMENT_API_KEY", os.environ.get("JUDGMENT_API_KEY", "")),
         ("Env", "JUDGMENT_BASE_URL", os.environ.get("JUDGMENT_BASE_URL", "")),
-        ("Config", str(config._config_path()), ""),
+        ("Env", "JUDGMENT_AUTH_URL", os.environ.get("JUDGMENT_AUTH_URL", "")),
+        ("Config", str(config.credentials_path()), ""),
     ]
     for kind, name, val in sources:
         if kind == "Config":

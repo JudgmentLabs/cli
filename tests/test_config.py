@@ -6,7 +6,9 @@ from judgment_cli import config
 
 
 def test_save_api_key_clears_oauth_config(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(config, "_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        config, "credentials_path", lambda: tmp_path / "credentials.json"
+    )
     monkeypatch.delenv("JUDGMENT_API_KEY", raising=False)
     config.save_oauth(
         access_token="oauth-access",
@@ -21,14 +23,18 @@ def test_save_api_key_clears_oauth_config(monkeypatch, tmp_path: Path) -> None:
 
 
 def test_resolve_base_url_prefers_env(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(config, "_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        config, "credentials_path", lambda: tmp_path / "credentials.json"
+    )
     monkeypatch.setenv("JUDGMENT_BASE_URL", "https://env.example")
 
     assert config.resolve_base_url() == "https://env.example"
 
 
 def test_resolve_auth_url_prefers_env(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(config, "_config_dir", lambda: tmp_path)
+    monkeypatch.setattr(
+        config, "credentials_path", lambda: tmp_path / "credentials.json"
+    )
     monkeypatch.setenv("JUDGMENT_AUTH_URL", "https://auth-env.example")
 
     assert config.resolve_auth_url() == "https://auth-env.example"

@@ -4,24 +4,16 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Callable, Protocol
+from typing import Protocol
 
 import httpx
 
 from judgment_cli import config
 from judgment_cli.env import optional_env_var
-from judgment_cli.oauth import OAuthTokens, refresh_tokens
-
-
-@dataclass(frozen=True)
-class AccessToken:
-    token: str
-    expires_on: int | None = None
+from judgment_cli.oauth import refresh_tokens
 
 
 class Credential(Protocol):
-    def get_token(self) -> AccessToken: ...
-
     def refresh(self, *, force: bool = False) -> bool: ...
 
     def apply(self, headers: dict[str, str]) -> None: ...
@@ -55,16 +47,12 @@ class ApiKeyCredential:
             return cls(str(key))
         return None
 
-    def get_token(self) -> AccessToken:
-        return AccessToken(self._api_key)
-
     def refresh(self, *, force: bool = False) -> bool:
         return False
 
     def apply(self, headers: dict[str, str]) -> None:
-        token = self.get_token().token
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
 
 
 class OAuthCredential:
@@ -73,7 +61,6 @@ class OAuthCredential:
         "_access_token",
         "_refresh_token",
         "_expires_at",
-        "_token_updater",
     )
 
     def __init__(
@@ -83,13 +70,11 @@ class OAuthCredential:
         access_token: str,
         refresh_token: str,
         expires_at: int | None = None,
-        token_updater: Callable[[OAuthTokens], None] | None = None,
     ):
         self._auth_url = auth_url
         self._access_token = access_token
         self._refresh_token = refresh_token
         self._expires_at = expires_at
-        self._token_updater = token_updater
 
     @property
     def refresh_token(self) -> str:
@@ -105,16 +90,7 @@ class OAuthCredential:
             access_token=str(cfg.get("access_token", "")),
             refresh_token=str(cfg.get("refresh_token", "")),
             expires_at=raw_expires_at if isinstance(raw_expires_at, int) else None,
-            token_updater=lambda tokens: config.update_oauth_tokens(
-                access_token=tokens.access_token,
-                refresh_token=tokens.refresh_token,
-                expires_at=tokens.expires_at,
-            ),
         )
-
-    def get_token(self) -> AccessToken:
-        self.refresh()
-        return AccessToken(self._access_token, self._expires_at)
 
     def refresh(self, *, force: bool = False) -> bool:
         if not self._refresh_token:
@@ -137,14 +113,17 @@ class OAuthCredential:
         self._access_token = tokens.access_token
         self._refresh_token = tokens.refresh_token
         self._expires_at = tokens.expires_at
-        if self._token_updater:
-            self._token_updater(tokens)
+        config.update_oauth_tokens(
+            access_token=tokens.access_token,
+            refresh_token=tokens.refresh_token,
+            expires_at=tokens.expires_at,
+        )
         return True
 
     def apply(self, headers: dict[str, str]) -> None:
-        token = self.get_token().token
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
+        self.refresh()
+        if self._access_token:
+            headers["Authorization"] = f"Bearer {self._access_token}"
 
 
 def resolve() -> ResolvedCredential:

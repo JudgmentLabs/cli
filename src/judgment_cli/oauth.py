@@ -19,6 +19,7 @@ import httpx
 
 CLIENT_ID = "judgment-cli"
 CALLBACK_PATH = "/callback"
+THREAD_JOIN_TIMEOUT_SECONDS = 5
 
 
 @dataclass(frozen=True)
@@ -47,7 +48,7 @@ def refresh_tokens(*, auth_url: str, refresh_token: str) -> OAuthTokens:
         },
         timeout=30,
     )
-    response.raise_for_status()
+    _raise_for_token_error(response)
     return _parse_tokens(response.json())
 
 
@@ -75,7 +76,7 @@ def browser_login(
     )
     authorize_url = f"{auth_url.rstrip('/')}/oauth/authorize?{authorize_query}"
 
-    thread = Thread(target=server.serve_forever, daemon=True)
+    thread = Thread(target=server.serve_forever)
     thread.start()
 
     try:
@@ -104,11 +105,18 @@ def browser_login(
             },
             timeout=30,
         )
-        response.raise_for_status()
+        _raise_for_token_error(response)
         return _parse_tokens(response.json())
     finally:
         server.shutdown()
+        thread.join(timeout=THREAD_JOIN_TIMEOUT_SECONDS)
         server.server_close()
+
+
+def _raise_for_token_error(response: httpx.Response) -> None:
+    if response.status_code < 400:
+        return
+    raise RuntimeError("Authentication failed. Please run `judgment login` again.")
 
 
 def _parse_tokens(payload: dict[str, Any]) -> OAuthTokens:
@@ -146,10 +154,17 @@ class _CallbackHandler(BaseHTTPRequestHandler):
             return
 
         query = parse_qs(parsed.query)
+        error = query.get("error", [""])[0]
+        code = query.get("code", [""])[0]
+        state = query.get("state", [""])[0]
+        if not error and not code:
+            error = "OAuth callback did not include a code"
+        if not error and not state:
+            error = "OAuth callback did not include state"
         result = {
-            "code": query.get("code", [""])[0],
-            "state": query.get("state", [""])[0],
-            "error": query.get("error", [""])[0],
+            "code": code,
+            "state": state,
+            "error": error,
         }
         self.server.result_queue.put(result)  # type: ignore[attr-defined]
 
