@@ -86,6 +86,31 @@ judgment completion fish > ~/.config/fish/completions/judgment.fish
 
 Run `judgment --help` for the full command list, and `judgment <group> <command> --help` for the flags on a specific command.
 
+### Natural language
+
+`judgment x` translates a Judgment-specific request into the matching CLI command, previews it, and prompts before running it. Configure an OpenAI-compatible LLM first:
+
+```bash
+judgment ai configure
+judgment ai models --provider openai --search gpt-5
+judgment x find me long traces
+```
+
+The shortcut is equivalent to `judgment ai x`. You can also configure it with environment variables:
+
+```bash
+export JUDGMENT_LLM_BASE_URL=https://api.openai.com/v1
+export JUDGMENT_LLM_API_KEY=sk-...
+export JUDGMENT_LLM_MODEL=gpt-5.2
+# optional: run generated commands without the confirmation prompt
+export JUDGMENT_LLM_AUTO_EXECUTE=true
+```
+
+For requests that need IDs, the LLM context knows about `JUDGMENT_ORG_ID` and `JUDGMENT_PROJECT_ID` when those variables are set. If they are not set, `judgment x` can use your Judgment API credentials to infer the likely organization and project. For read-only project-scoped requests, it picks the organization with the most projects and the project with the most traces.
+
+For aggregate requests, `judgment x` can compose multiple JSON-producing CLI commands and parse them locally, for example to find the organization with the most projects or the project with the most traces.
+The LLM prompt includes the exact JSON output shapes for read-only CLI commands so it can parse fields such as `organizations[].detail.projects[0].count`, `projects[].total_traces`, and trace/session pagination without guessing.
+
 ```bash
 # Projects
 judgment projects list
