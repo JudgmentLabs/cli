@@ -146,6 +146,9 @@ register_commands(cli)
 # Hand-written commands attach themselves to the auto-generated groups when
 # imported (see judgment_cli/judges.py). Importing for side effects only.
 from judgment_cli import judges  # noqa: E402, F401
+from judgment_cli.ai import register_ai_commands  # noqa: E402
+
+register_ai_commands(cli)
 
 
 def main() -> None:
