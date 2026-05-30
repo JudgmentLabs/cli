@@ -17,7 +17,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 
 import httpx
 
-CLIENT_ID = "judgment-cli"
+CLIENT_ID = "0d973a9d2b29480f9fc75e0f7d70f3d2"
 CALLBACK_PATH = "/callback"
 THREAD_JOIN_TIMEOUT_SECONDS = 5
 
