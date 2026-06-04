@@ -5,32 +5,24 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any
 
 from platformdirs import user_config_dir
 
 from judgment_cli.env import optional_env_var
 
-_DEFAULT_BASE_URL = "https://cli.judgmentlabs.ai"
+DEFAULT_BASE_URL = "https://cli.judgmentlabs.ai"
+DEFAULT_AUTH_URL = "https://auth.judgmentlabs.ai"
 _APP_NAME = "judgment"
 _APP_AUTHOR = "JudgmentLabs"
 
 
-class ResolvedCredentials(NamedTuple):
-    base_url: str
-    api_key: str
-
-
-def _config_dir() -> Path:
-    return Path(user_config_dir(_APP_NAME, _APP_AUTHOR))
-
-
-def _config_path() -> Path:
-    return _config_dir() / "credentials.json"
+def credentials_path() -> Path:
+    return Path(user_config_dir(_APP_NAME, _APP_AUTHOR)) / "credentials.json"
 
 
 def load() -> dict[str, Any]:
-    path = _config_path()
+    path = credentials_path()
     if not path.exists():
         return {}
     try:
@@ -39,11 +31,44 @@ def load() -> dict[str, Any]:
         return {}
 
 
-def save(*, api_key: str, base_url: str | None = None) -> Path:
-    data: dict[str, str] = {"api_key": api_key}
-    if base_url and base_url != _DEFAULT_BASE_URL:
-        data["base_url"] = base_url
-    path = _config_path()
+def save(*, api_key: str) -> Path:
+    data: dict[str, str] = {"auth_type": "api_key", "api_key": api_key}
+    return _write(data)
+
+
+def save_oauth(
+    *,
+    access_token: str,
+    refresh_token: str,
+    expires_at: int,
+) -> Path:
+    data: dict[str, str | int] = {
+        "auth_type": "oauth",
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "expires_at": expires_at,
+    }
+    return _write(data)
+
+
+def update_oauth_tokens(
+    *, access_token: str, refresh_token: str, expires_at: int
+) -> Path:
+    cfg = load()
+    cfg.update(
+        {
+            "auth_type": "oauth",
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "expires_at": expires_at,
+        }
+    )
+    cfg.pop("api_key", None)
+    return _write(cfg)
+
+
+def _write(data: dict[str, Any]) -> Path:
+    path = credentials_path()
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w") as f:
@@ -52,25 +77,18 @@ def save(*, api_key: str, base_url: str | None = None) -> Path:
 
 
 def clear() -> bool:
-    path = _config_path()
+    path = credentials_path()
     if path.exists():
         path.unlink()
         return True
     return False
 
 
-def resolve() -> ResolvedCredentials:
-    """Resolve credentials using precedence: env > config file > default."""
-    cfg = load()
+def resolve_base_url() -> str:
+    """Resolve the API base URL from env or the default."""
+    return optional_env_var("JUDGMENT_BASE_URL") or DEFAULT_BASE_URL
 
-    base_url: str = (
-        optional_env_var("JUDGMENT_BASE_URL")
-        or cfg.get("base_url")
-        or _DEFAULT_BASE_URL
-    )
-    api_key: str = (
-        optional_env_var("JUDGMENT_API_KEY")
-        or cfg.get("api_key")
-        or ""
-    )
-    return ResolvedCredentials(base_url=base_url, api_key=api_key)
+
+def resolve_auth_url() -> str:
+    """Resolve the OAuth server URL from env or the default."""
+    return optional_env_var("JUDGMENT_AUTH_URL") or DEFAULT_AUTH_URL

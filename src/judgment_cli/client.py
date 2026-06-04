@@ -7,21 +7,43 @@ import sys
 
 import click
 import httpx
+from judgment_cli.credentials import Credential, CredentialRefreshError
 
 
 class JudgmentClient:
-    __slots__ = ("base_url", "api_key", "_client")
+    __slots__ = (
+        "base_url",
+        "credential",
+        "_client",
+    )
 
-    def __init__(self, base_url: str, api_key: str):
+    def __init__(
+        self,
+        base_url: str,
+        credential: Credential,
+    ):
         self.base_url = base_url
-        self.api_key = api_key
+        self.credential = credential
         self._client = httpx.Client(timeout=60, follow_redirects=True)
 
     def _auth_headers(self) -> dict[str, str]:
         headers: dict[str, str] = {}
-        if self.api_key:
-            headers["Authorization"] = f"Bearer {self.api_key}"
+        self._apply_auth(headers)
         return headers
+
+    def _apply_auth(self, headers: dict[str, str]) -> None:
+        try:
+            self.credential.apply(headers)
+        except CredentialRefreshError as exc:
+            click.echo(f"Error: failed to refresh login ({exc})", err=True)
+            sys.exit(1)
+
+    def _refresh_auth(self, *, force: bool = False) -> bool:
+        try:
+            return self.credential.refresh(force=force)
+        except CredentialRefreshError as exc:
+            click.echo(f"Error: failed to refresh login ({exc})", err=True)
+            sys.exit(1)
 
     def request(
         self,
@@ -75,9 +97,21 @@ class JudgmentClient:
             sys.exit(1)
 
         if r.status_code == 401 or r.status_code == 403:
+            if self._refresh_auth(force=True):
+                self._apply_auth(kwargs["headers"])
+                try:
+                    r = self._client.request(method, url, **kwargs)
+                except httpx.RequestError as exc:
+                    click.echo(f"Error: connection failed ({exc})", err=True)
+                    sys.exit(1)
+                if r.status_code not in (401, 403):
+                    return self._handle_response(r)
             click.echo("Error: authentication failed.", err=True)
             sys.exit(1)
 
+        return self._handle_response(r)
+
+    def _handle_response(self, r: httpx.Response) -> object:
         content_type = r.headers.get("content-type", "")
         is_json = "application/json" in content_type
 

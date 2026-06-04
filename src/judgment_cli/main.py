@@ -7,7 +7,9 @@ import click
 from judgment_cli import __version__
 from judgment_cli.client import JudgmentClient
 from judgment_cli import config
+from judgment_cli import credentials
 from judgment_cli.generated_commands import register_commands
+from judgment_cli.oauth import browser_login
 from judgment_cli.ui import mask_key
 
 
@@ -18,18 +20,14 @@ def cli(ctx: click.Context) -> None:
     """Judgment CLI — interact with the Judgment API from the command line.
 
     Credentials are read from environment variables (JUDGMENT_API_KEY,
-    JUDGMENT_BASE_URL) or the local config file written by `judgment login`.
-    Environment variables take precedence over the config file. Most commands
-    that touch organization-scoped resources take ORGANIZATION_ID as the first
-    positional argument (for example ``judgment projects list <ORGANIZATION_ID>``).
-    Run ``judgment organizations list`` to find IDs. Hand-written commands may
-    differ; for instance ``judgment judges upload`` uses ``-o``/``--organization-id``.
+    JUDGMENT_BASE_URL, JUDGMENT_AUTH_URL) or the local config file written by
+    `judgment login`. Environment variables take precedence over the config file.
     """
     ctx.ensure_object(dict)
-    creds = config.resolve()
+    resolved = credentials.resolve()
     ctx.obj["client"] = JudgmentClient(
-        base_url=creds.base_url.rstrip("/"),
-        api_key=creds.api_key,
+        base_url=resolved.base_url,
+        credential=resolved.credential,
     )
 
 
@@ -37,13 +35,44 @@ def cli(ctx: click.Context) -> None:
 
 
 @cli.command()
-def login() -> None:
+@click.option(
+    "--api-key",
+    "api_key_login",
+    is_flag=True,
+    help="Prompt for an API key instead of opening browser login.",
+)
+@click.option(
+    "--no-browser",
+    is_flag=True,
+    help="Print the authorization URL instead of opening a browser.",
+)
+def login(api_key_login: bool, no_browser: bool) -> None:
     """Authenticate and store credentials locally."""
-    api_key = click.prompt("API key", hide_input=True)
+    auth_url = config.resolve_auth_url().rstrip("/")
 
-    path = config.save(api_key=api_key)
+    if api_key_login:
+        api_key = click.prompt("API key", hide_input=True)
+        path = config.save(api_key=api_key)
+        click.echo(f"Credentials saved to {path}")
+        click.echo(f"API key: {mask_key(api_key)}")
+        return
+
+    if no_browser:
+        click.echo("Open this URL in your browser to finish logging in:")
+    else:
+        click.echo("Opening browser for Judgment login...")
+    tokens = browser_login(
+        auth_url=auth_url,
+        open_browser=not no_browser,
+        on_authorize_url=click.echo if no_browser else None,
+    )
+    path = config.save_oauth(
+        access_token=tokens.access_token,
+        refresh_token=tokens.refresh_token,
+        expires_at=tokens.expires_at,
+    )
     click.echo(f"Credentials saved to {path}")
-    click.echo(f"API key: {mask_key(api_key)}")
+    click.echo("Logged in with browser OAuth.")
 
 
 @cli.command()
@@ -56,10 +85,7 @@ def configure() -> None:
     cfg = config.load()
     api_key = _prompt_field("API key", cfg.get("api_key", ""), hide=True)
 
-    path = config.save(
-        api_key=api_key,
-        base_url=cfg.get("base_url"),
-    )
+    path = config.save(api_key=api_key)
     click.echo(f"Credentials saved to {path}")
 
 
@@ -123,14 +149,15 @@ def status() -> None:
     sources = [
         ("Env", "JUDGMENT_API_KEY", os.environ.get("JUDGMENT_API_KEY", "")),
         ("Env", "JUDGMENT_BASE_URL", os.environ.get("JUDGMENT_BASE_URL", "")),
-        ("Config", str(config._config_path()), ""),
+        ("Env", "JUDGMENT_AUTH_URL", os.environ.get("JUDGMENT_AUTH_URL", "")),
+        ("Config", str(config.credentials_path()), ""),
     ]
     for kind, name, val in sources:
         if kind == "Config":
             if cfg:
                 click.echo(f"  {kind:6s}  {name}")
                 for k, v in cfg.items():
-                    display = mask_key(v) if "key" in k else v
+                    display = mask_key(str(v)) if "key" in k or "token" in k else v
                     click.echo(f"          {k}: {display}")
             else:
                 click.echo(f"  {kind:6s}  {name}  (not found)")
