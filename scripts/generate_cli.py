@@ -226,7 +226,7 @@ def _is_positional_scalar(schema: dict[str, Any]) -> bool:
     instead, where a name like ``--combine-type all`` reads better than an
     anonymous ``{all|any}`` slot in the signature.
     """
-    return _schema_type(schema) == "string" and not schema.get("enum")
+    return _schema_type(schema) == "string" and click_choice_expr(schema) is None
 
 
 def click_type_expr(schema: dict[str, Any]) -> str | None:

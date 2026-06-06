@@ -114,7 +114,7 @@ def agent_threads_get(ctx, output_format, organization_id, project_id, thread_id
 @agent_threads_group.command("list")
 @click.argument("organization_id")
 @click.argument("project_id")
-@click.argument("agent_type", type=click.Choice(['global_copilot', 'custom_agent']))
+@click.option("--agent-type", "agent_type", required=True, type=click.Choice(['global_copilot', 'custom_agent']), help='Active agent thread kinds available for new conversations: `global_copilot` or `custom_agent`.')
 @click.argument("agent_name")
 @click.option("--judge-id", "judge_id", default=None, help='Restrict to threads associated with this judge.')
 @click.option("--agent-config-id", "agent_config_id", default=None, help='Restrict to threads for this exact agent config.')
