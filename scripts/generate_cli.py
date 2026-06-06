@@ -176,9 +176,28 @@ def py_var_name(name: str) -> str:
 def _schema_type(schema: dict[str, Any]) -> str | None:
     if "type" in schema:
         return schema["type"]
+    for option in schema.get("allOf", []):
+        if isinstance(option, dict):
+            option_type = _schema_type(option)
+            if option_type:
+                return option_type
     for option in schema.get("anyOf", []):
-        if option.get("type") and option["type"] != "null":
+        if (
+            isinstance(option, dict)
+            and option.get("type")
+            and option["type"] != "null"
+        ):
             return option["type"]
+        if isinstance(option, dict) and "const" in option:
+            const_value = option["const"]
+            if isinstance(const_value, str):
+                return "string"
+            if isinstance(const_value, bool):
+                return "boolean"
+            if isinstance(const_value, int):
+                return "integer"
+            if isinstance(const_value, float):
+                return "number"
     return None
 
 
@@ -224,6 +243,19 @@ def click_type_expr(schema: dict[str, Any]) -> str | None:
 def click_choice_expr(schema: dict[str, Any]) -> str | None:
     values = schema.get("enum")
     if not values:
+        const_values = [
+            option["const"]
+            for option in schema.get("anyOf", [])
+            if isinstance(option, dict) and "const" in option
+        ]
+        values = const_values or None
+    if not values:
+        for option in schema.get("allOf", []):
+            if isinstance(option, dict):
+                nested = click_choice_expr(option)
+                if nested:
+                    return nested
+    if not values:
         return None
     quoted = ", ".join(repr(v) for v in values)
     return f"click.Choice([{quoted}])"
@@ -234,6 +266,9 @@ def _schema_description(schema: dict[str, Any]) -> str | None:
     desc = schema.get("description")
     if desc:
         return desc
+    for option in schema.get("allOf", []):
+        if isinstance(option, dict) and option.get("description"):
+            return option["description"]
     for option in schema.get("anyOf", []):
         if isinstance(option, dict) and option.get("description"):
             return option["description"]
@@ -426,27 +461,31 @@ def generate_command_code(
             lines.append("    _yaml_output(result, output_format=output_format)")
         return lines
 
-    lines.append("    body = {}")
+    lines.append("    _json_body = {}")
     for prop in body_props:
         var = py_var_name(prop["name"])
         if prop["scalar"]:
             if prop["required"]:
-                lines.append(f'    body["{prop["name"]}"] = {var}')
+                lines.append(f'    _json_body["{prop["name"]}"] = {var}')
             else:
                 lines.append(f"    if {var} is not None:")
-                lines.append(f'        body["{prop["name"]}"] = {var}')
+                lines.append(f'        _json_body["{prop["name"]}"] = {var}')
         elif prop["scalar_array"]:
             lines.append(f"    if {var}:")
-            lines.append(f'        body["{prop["name"]}"] = list({var})')
+            lines.append(f'        _json_body["{prop["name"]}"] = list({var})')
         else:
             if prop["required"]:
-                lines.append(f'    body["{prop["name"]}"] = json.loads({var})')
+                lines.append(
+                    f'    _json_body["{prop["name"]}"] = json.loads({var})'
+                )
             else:
                 lines.append(f"    if {var} is not None:")
-                lines.append(f'        body["{prop["name"]}"] = json.loads({var})')
+                lines.append(
+                    f'        _json_body["{prop["name"]}"] = json.loads({var})'
+                )
 
     lines.append(
-        f'    result = ctx.obj["client"].request("{method}", url, json_body=body)'
+        f'    result = ctx.obj["client"].request("{method}", url, json_body=_json_body)'
     )
     if is_table:
         lines.append("    _table_output(result, output_format=output_format)")
