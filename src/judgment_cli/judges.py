@@ -28,6 +28,7 @@ import click
 
 from judgment_cli import scorer_bundle
 from judgment_cli.client import JudgmentClient
+from judgment_cli.context_resolver import resolve_context
 from judgment_cli.generated_commands import judges_group
 from judgment_cli.ui import error, output, success
 
@@ -37,16 +38,30 @@ from judgment_cli.ui import error, output, success
 @click.option(
     "-o",
     "--organization-id",
-    "organization_id",
-    required=True,
+    "--org-id",
+    "organization_id_option",
+    default=None,
     help="Organization ID that owns the target project.",
+)
+@click.option(
+    "--organization",
+    "--org",
+    "organization_name_option",
+    default=None,
+    help="Organization name to resolve.",
 )
 @click.option(
     "-p",
     "--project-id",
-    "project_id",
-    required=True,
+    "project_id_option",
+    default=None,
     help="Project ID to upload the judge to.",
+)
+@click.option(
+    "--project",
+    "project_name_option",
+    default=None,
+    help="Project name to resolve.",
 )
 @click.option(
     "-r",
@@ -87,8 +102,10 @@ from judgment_cli.ui import error, output, success
 def judges_upload(
     ctx: click.Context,
     entrypoint_path: str,
-    organization_id: str,
-    project_id: str,
+    organization_id_option: str | None,
+    organization_name_option: str | None,
+    project_id_option: str | None,
+    project_name_option: str | None,
     requirements_path: str | None,
     include_paths: tuple[str, ...],
     judge_name: str | None,
@@ -103,6 +120,18 @@ def judges_upload(
     ``CategoricalResponse`` subclass with ``categories``).
     """
     client: JudgmentClient = ctx.obj["client"]
+    active = resolve_context(
+        client,
+        organization_id=organization_id_option,
+        organization_name=organization_name_option,
+        project_id=project_id_option,
+        project_name=project_name_option,
+        require_project=True,
+    )
+    organization_id = active.organization_id
+    project_id = active.project_id
+    if project_id is None:
+        error("No project selected.")
 
     with open(entrypoint_path, "r") as f:
         source = f.read()

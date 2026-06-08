@@ -53,7 +53,7 @@ Credentials are written atomically with `0600` permissions to a platform-appropr
 
 | Priority | Method      | Example                                                  |
 |----------|-------------|----------------------------------------------------------|
-| 1        | Env vars    | `JUDGMENT_API_KEY`, `JUDGMENT_ORG_ID`, `JUDGMENT_BASE_URL`, `JUDGMENT_AUTH_URL` |
+| 1        | Env vars    | `JUDGMENT_API_KEY`, `JUDGMENT_ORG_ID`, `JUDGMENT_PROJECT_ID`, `JUDGMENT_BASE_URL`, `JUDGMENT_AUTH_URL` |
 | 2        | Config file | `judgment login`                                         |
 
 ```bash
@@ -87,11 +87,23 @@ judgment completion fish > ~/.config/fish/completions/judgment.fish
 
 Run `judgment --help` for the full command list, and `judgment <group> <command> --help` for the flags on a specific command.
 
+Select a default organization and project from the CLI:
+
+```bash
+judgment context set   # arrow-key selector; type to filter orgs/projects
+judgment context show
+```
+
+Once context is set, project-scoped commands can omit IDs. You can still pass
+`--organization-id`, `--project-id`, `--organization`, `--project`, or the old
+positional IDs for scripts.
+
 ```bash
 # Projects
 judgment projects list
 
 # Traces
+judgment traces search --pagination '{"limit":25,"cursorSortValue":null,"cursorItemId":null}'
 judgment traces search    <PROJECT_ID> --pagination '{"limit":25,"cursorSortValue":null,"cursorItemId":null}'
 judgment traces get       <PROJECT_ID> <TRACE_ID>
 judgment traces spans     <PROJECT_ID> <TRACE_ID>

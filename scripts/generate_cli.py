@@ -41,6 +41,7 @@ DEFAULT_SPEC = "https://cli.judgmentlabs.ai/openapi/json"
 # Operations whose CLI command is hand-written in judgment_cli/judges.py
 # (or another extension module) and must not be auto-generated.
 MANUAL_COMMANDS = {"judges.upload"}
+CONTEXT_FIELDS = {"organization_id", "project_id"}
 
 
 # ---------------------------------------------------------------------------
@@ -171,6 +172,10 @@ def py_var_name(name: str) -> str:
     if keyword.iskeyword(s):
         s += "_value"
     return s
+
+
+def _is_context_field(name: str) -> bool:
+    return name in CONTEXT_FIELDS
 
 
 def _schema_type(schema: dict[str, Any]) -> str | None:
@@ -322,16 +327,82 @@ def generate_command_code(
     body_props = extract_json_body_properties(operation)
 
     is_table = cmd_name in ("list", "search")
+    context_names: set[str] = set()
+    context_names.update(pp for pp in path_params if _is_context_field(pp))
+    context_names.update(
+        qp["name"]
+        for qp in query_params
+        if qp["required"] and _is_context_field(qp["name"])
+    )
+    if method != "GET":
+        context_names.update(
+            prop["name"]
+            for prop in body_props
+            if prop["required"] and _is_context_field(prop["name"])
+        )
+
+    has_context = bool(context_names)
+    needs_organization_id = "organization_id" in context_names
+    needs_project_id = "project_id" in context_names
+    add_organization_options = needs_organization_id or needs_project_id
+
+    def query_is_positional(qp: dict[str, Any]) -> bool:
+        return bool(qp["required"] and _is_positional_scalar(qp["schema"]))
+
+    def body_is_context(prop: dict[str, Any]) -> bool:
+        return bool(prop["required"] and _is_context_field(prop["name"]))
+
+    positional_names: list[str] = []
+    if has_context:
+        positional_names.extend(pp for pp in path_params if not _is_context_field(pp))
+        positional_names.extend(
+            qp["name"]
+            for qp in query_params
+            if query_is_positional(qp) and not _is_context_field(qp["name"])
+        )
+        if method != "GET":
+            positional_names.extend(
+                prop["name"]
+                for prop in body_props
+                if prop["positional"] and not body_is_context(prop)
+            )
 
     lines: list[str] = [f'@{group_name}_group.command("{cmd_name}")']
 
-    for pp in path_params:
-        lines.append(f'@click.argument("{pp}")')
+    if has_context:
+        if add_organization_options:
+            lines.append(
+                '@click.option("--organization-id", "--org-id", '
+                '"organization_id_option", default=None, '
+                'help="Organization ID. Defaults to JUDGMENT_ORG_ID or saved context.")'
+            )
+            lines.append(
+                '@click.option("--organization", "--org", '
+                '"organization_name_option", default=None, '
+                'help="Organization name to resolve.")'
+            )
+        if needs_project_id:
+            lines.append(
+                '@click.option("--project-id", "project_id_option", default=None, '
+                'help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")'
+            )
+            lines.append(
+                '@click.option("--project", "project_name_option", default=None, '
+                'help="Project name to resolve.")'
+            )
+        lines.append('@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")')
+    else:
+        for pp in path_params:
+            lines.append(f'@click.argument("{pp}")')
 
     for qp in query_params:
         opt = cli_option_name(qp["name"])
         var = py_var_name(qp["name"])
-        if qp["required"] and _is_positional_scalar(qp["schema"]):
+        if has_context and qp["required"] and _is_context_field(qp["name"]):
+            continue
+        if has_context and query_is_positional(qp):
+            continue
+        if query_is_positional(qp):
             type_arg = click_param_args(qp["schema"])
             lines.append(f'@click.argument("{qp["name"]}"{type_arg})')
         elif qp["required"]:
@@ -349,6 +420,10 @@ def generate_command_code(
         for prop in body_props:
             opt = cli_option_name(prop["name"])
             var = py_var_name(prop["name"])
+            if has_context and body_is_context(prop):
+                continue
+            if has_context and prop["positional"]:
+                continue
             if prop["positional"]:
                 type_arg = click_param_args(prop["schema"])
                 lines.append(f'@click.argument("{prop["name"]}"{type_arg})')
@@ -391,12 +466,67 @@ def generate_command_code(
 
     lines.append("@click.pass_context")
 
-    sig_parts = ["ctx"] + path_params + [py_var_name(q["name"]) for q in query_params]
+    sig_parts = ["ctx"]
+    if has_context:
+        sig_parts.append("_args")
+    else:
+        sig_parts += path_params
+        sig_parts += [py_var_name(q["name"]) for q in query_params]
     sig_parts.append("output_format")
-    if method != "GET":
+    if has_context:
+        if add_organization_options:
+            sig_parts += ["organization_id_option", "organization_name_option"]
+        if needs_project_id:
+            sig_parts += ["project_id_option", "project_name_option"]
+        sig_parts += [
+            py_var_name(q["name"])
+            for q in query_params
+            if not (q["required"] and _is_context_field(q["name"]))
+            and not query_is_positional(q)
+        ]
+        if method != "GET":
+            sig_parts += [
+                py_var_name(prop["name"])
+                for prop in body_props
+                if not body_is_context(prop) and not prop["positional"]
+            ]
+    elif method != "GET":
         sig_parts += [py_var_name(prop["name"]) for prop in body_props]
     lines.append(f"def {func_name}({', '.join(sig_parts)}):")
     lines.append(_emit_docstring(description))
+
+    if has_context:
+        organization_option = (
+            "organization_id_option" if add_organization_options else "None"
+        )
+        organization_name_option = (
+            "organization_name_option" if add_organization_options else "None"
+        )
+        project_option = "project_id_option" if needs_project_id else "None"
+        project_name_option = "project_name_option" if needs_project_id else "None"
+        lines.append("    _parsed = _parse_contextual_positionals(")
+        lines.append("        _args,")
+        lines.append(f"        positional_names={positional_names!r},")
+        lines.append(f"        needs_organization_id={needs_organization_id!r},")
+        lines.append(f"        needs_project_id={needs_project_id!r},")
+        lines.append(f"        organization_id={organization_option},")
+        lines.append(f"        project_id={project_option},")
+        lines.append("    )")
+        lines.append("    _context = _resolve_context(")
+        lines.append('        ctx.obj["client"],')
+        lines.append("        organization_id=_parsed.organization_id,")
+        lines.append(f"        organization_name={organization_name_option},")
+        lines.append("        project_id=_parsed.project_id,")
+        lines.append(f"        project_name={project_name_option},")
+        lines.append(f"        require_project={needs_project_id!r},")
+        lines.append("    )")
+        if needs_organization_id:
+            lines.append("    organization_id = _context.organization_id")
+        if needs_project_id:
+            lines.append("    project_id = _context.project_id")
+        for name in positional_names:
+            var = py_var_name(name)
+            lines.append(f'    {var} = _parsed.values["{name}"]')
 
     if path_params:
         lines.append(f'    url = f"{path}"')
@@ -481,6 +611,8 @@ def generate_all(spec: dict) -> str:
 
         import click
 
+        from judgment_cli.context_resolver import parse_contextual_positionals as _parse_contextual_positionals
+        from judgment_cli.context_resolver import resolve_context as _resolve_context
         from judgment_cli.ui import table_output as _table_output, yaml_output as _yaml_output
 
     """)
