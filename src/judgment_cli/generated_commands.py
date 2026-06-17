@@ -66,16 +66,19 @@ def agent_threads_get(ctx, _args, output_format, organization_id_option, organiz
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
 @click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
-@click.option("--agent-type", "agent_type", required=True, help='JSON value for agent_type.')
-@click.option("--agent-name", "agent_name", required=True, help='JSON value for agent_name.')
+@click.option("--agent-type", "agent_type", required=True, type=click.Choice(['global_copilot', 'custom_agent']), help='Active agent thread kinds available for new conversations: `global_copilot` or `custom_agent`.')
+@click.option("--agent-name", "agent_name", required=True)
 @click.option("--judge-id", "judge_id", default=None, help='Restrict to threads associated with this judge.')
-@click.option("--all-users", "all_users", default=None, type=bool, help='When true and the caller is a Judgment admin, return threads from all users instead of only the caller.')
+@click.option("--agent-config-id", "agent_config_id", default=None, help='Restrict to threads for this exact agent config.')
+@click.option("--scope", "scope", default=None, type=click.Choice(['owner', 'project']))
+@click.option("--owner-user-id", "owner_user_id", default=None, help='Restrict project history to a specific thread owner.')
+@click.option("--all-users", "all_users", default=None, type=bool, help='Deprecated alias for scope=project. Prefer the `scope` query parameter.')
 @click.option("--limit", "limit", default=None, type=float, help='Maximum number of threads to return (1–100).')
 @click.option("--cursor-updated-at", "cursor_updated_at", default=None, help='Pagination cursor: `updated_at` value from a previous `next_cursor`.')
 @click.option("--cursor-thread-id", "cursor_thread_id", default=None, help='Pagination cursor: `thread_id` value from a previous `next_cursor`.')
 @click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")
 @click.pass_context
-def agent_threads_list(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option, agent_type, agent_name, judge_id, all_users, limit, cursor_updated_at, cursor_thread_id):
+def agent_threads_list(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option, agent_type, agent_name, judge_id, agent_config_id, scope, owner_user_id, all_users, limit, cursor_updated_at, cursor_thread_id):
     "List agent thread conversations.\n\n\x08\nList the authenticated user's agent thread conversations in a project (global_copilot or custom_agent). Returns each thread's title, type, message count, active run status, and timestamps."
     _parsed = _parse_contextual_positionals(
         _args,
@@ -99,10 +102,16 @@ def agent_threads_list(ctx, _args, output_format, organization_id_option, organi
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
-    body["agent_type"] = json.loads(agent_type)
-    body["agent_name"] = json.loads(agent_name)
+    body["agent_type"] = agent_type
+    body["agent_name"] = agent_name
     if judge_id is not None:
         body["judge_id"] = judge_id
+    if agent_config_id is not None:
+        body["agent_config_id"] = agent_config_id
+    if scope is not None:
+        body["scope"] = scope
+    if owner_user_id is not None:
+        body["owner_user_id"] = owner_user_id
     if all_users is not None:
         body["all_users"] = all_users
     if limit is not None:
@@ -698,7 +707,7 @@ def judges_group() -> None:
 @click.option("--categories", "categories", default=None, help='List of `{name, description}` choices for `categorical` judges. Ignored for other score types.')
 @click.option("--min-score", "min_score", default=None, type=float, help='Lower bound for `numeric` judges. Defaults to 0.')
 @click.option("--max-score", "max_score", default=None, type=float, help='Upper bound for `numeric` judges. Defaults to 1.')
-@click.option("--judge-type", "judge_type", default=None)
+@click.option("--judge-type", "judge_type", default=None, type=click.Choice(['prompt']))
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
 def judges_create(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option, judge_description, description, score_type, categories, min_score, max_score, judge_type):

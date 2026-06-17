@@ -181,9 +181,14 @@ def _is_context_field(name: str) -> bool:
 def _schema_type(schema: dict[str, Any]) -> str | None:
     if "type" in schema:
         return schema["type"]
-    for option in schema.get("anyOf", []):
-        if option.get("type") and option["type"] != "null":
-            return option["type"]
+    types = []
+    for option in schema.get("anyOf") or schema.get("allOf") or []:
+        option_type = _schema_type(option) if isinstance(option, dict) else None
+        if option_type and option_type != "null":
+            types.append(option_type)
+    unique_types = list(dict.fromkeys(types))
+    if len(unique_types) == 1:
+        return unique_types[0]
     return None
 
 
@@ -212,7 +217,11 @@ def _is_positional_scalar(schema: dict[str, Any]) -> bool:
     instead, where a name like ``--combine-type all`` reads better than an
     anonymous ``{all|any}`` slot in the signature.
     """
-    return _schema_type(schema) == "string" and not schema.get("enum")
+    return (
+        schema.get("type") == "string"
+        and not schema.get("enum")
+        and "const" not in schema
+    )
 
 
 def click_type_expr(schema: dict[str, Any]) -> str | None:
@@ -227,21 +236,31 @@ def click_type_expr(schema: dict[str, Any]) -> str | None:
 
 
 def click_choice_expr(schema: dict[str, Any]) -> str | None:
-    values = schema.get("enum")
+    values = _schema_choice_values(schema)
     if not values:
         return None
     quoted = ", ".join(repr(v) for v in values)
     return f"click.Choice([{quoted}])"
 
 
+def _schema_choice_values(schema: dict[str, Any]) -> list[Any]:
+    values = schema.get("enum") or ([schema["const"]] if "const" in schema else [])
+    for option in schema.get("anyOf") or schema.get("allOf") or []:
+        if isinstance(option, dict):
+            values.extend(_schema_choice_values(option))
+    return list(dict.fromkeys(values))
+
+
 def _schema_description(schema: dict[str, Any]) -> str | None:
-    """Extract a human description from a schema (or any of its anyOf branches)."""
+    """Extract a human description from a schema or composed schema branch."""
     desc = schema.get("description")
     if desc:
         return desc
-    for option in schema.get("anyOf", []):
-        if isinstance(option, dict) and option.get("description"):
-            return option["description"]
+    for option in schema.get("anyOf") or schema.get("allOf") or []:
+        if isinstance(option, dict):
+            desc = _schema_description(option)
+            if desc:
+                return desc
     return None
 
 

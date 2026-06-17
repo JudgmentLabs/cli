@@ -9,15 +9,8 @@ import click
 
 from judgment_cli import context as context_store
 from judgment_cli.context_entities import (
-    display_name,
-    extract_items,
-    organization_id as get_organization_id,
     organization_label,
-    organization_name as get_organization_name,
-    project_id as get_project_id,
     project_label,
-    project_name as get_project_name,
-    sort_projects_by_usage,
 )
 from judgment_cli.env import optional_env_var
 
@@ -35,7 +28,24 @@ class ParsedContextualArgs:
 
 def fetch_organizations(client: Any) -> list[dict[str, Any]]:
     response = client.request("GET", "/organizations")
-    return extract_items(response, ("organizations",))
+    if not isinstance(response, dict):
+        raise click.ClickException("Unexpected organizations response.")
+    organizations = response.get("organizations")
+    if not isinstance(organizations, list):
+        raise click.ClickException("Unexpected organizations response.")
+
+    for organization in organizations:
+        if not isinstance(organization, dict):
+            raise click.ClickException("Unexpected organizations response.")
+        organization_id = organization.get("organization_id")
+        detail = organization.get("detail")
+        if (
+            not isinstance(organization_id, str)
+            or not isinstance(detail, dict)
+            or not isinstance(detail.get("name"), str)
+        ):
+            raise click.ClickException("Unexpected organizations response.")
+    return organizations
 
 
 def fetch_projects(client: Any, organization_id: str) -> list[dict[str, Any]]:
@@ -44,7 +54,21 @@ def fetch_projects(client: Any, organization_id: str) -> list[dict[str, Any]]:
         "/projects",
         params={"organization_id": organization_id},
     )
-    return sort_projects_by_usage(extract_items(response, ("projects",)))
+    if not isinstance(response, dict):
+        raise click.ClickException("Unexpected projects response.")
+    projects = response.get("projects")
+    if not isinstance(projects, list):
+        raise click.ClickException("Unexpected projects response.")
+
+    for project in projects:
+        if not isinstance(project, dict):
+            raise click.ClickException("Unexpected projects response.")
+        if (
+            not isinstance(project.get("project_id"), str)
+            or not isinstance(project.get("project_name"), str)
+        ):
+            raise click.ClickException("Unexpected projects response.")
+    return projects
 
 
 def parse_contextual_positionals(
@@ -130,27 +154,50 @@ def resolve_context(
     project: dict[str, Any] | None = None
 
     if organization_name:
-        org = _find_one_by_name(
-            fetch_organizations(client),
-            organization_name,
-            "organization",
-        )
-        organization_id = get_organization_id(org)
+        organization_matches = [
+            organization
+            for organization in fetch_organizations(client)
+            if organization["detail"]["name"].casefold()
+            == organization_name.casefold()
+        ]
+        if len(organization_matches) > 1:
+            raise click.ClickException(
+                f"Multiple organizations named {organization_name!r}; pass the ID instead."
+            )
+        if not organization_matches:
+            raise click.ClickException(
+                f"No organization named {organization_name!r} was found."
+            )
+        org = organization_matches[0]
+        organization_id = org["organization_id"]
     elif not organization_id:
         organization_id = env_org_id or _str_or_none(saved.get("organization_id"))
 
     if project_name:
         if organization_id:
             projects = fetch_projects(client, organization_id)
-            project = _find_one_by_name(projects, project_name, "project")
-            project_id = get_project_id(project)
+            project_matches = [
+                candidate
+                for candidate in projects
+                if candidate["project_name"].casefold() == project_name.casefold()
+            ]
+            if len(project_matches) > 1:
+                raise click.ClickException(
+                    f"Multiple projects named {project_name!r}; pass the ID instead."
+                )
+            if not project_matches:
+                raise click.ClickException(
+                    f"No project named {project_name!r} was found."
+                )
+            project = project_matches[0]
+            project_id = project["project_id"]
         else:
             org, project = _find_project_across_organizations(
                 client,
                 project_name=project_name,
             )
-            organization_id = get_organization_id(org)
-            project_id = get_project_id(project)
+            organization_id = org["organization_id"]
+            project_id = project["project_id"]
     elif not project_id:
         project_id = env_project_id
         saved_project_id = _str_or_none(saved.get("project_id"))
@@ -167,21 +214,21 @@ def resolve_context(
             client,
             project_id=project_id,
         )
-        organization_id = get_organization_id(org)
-        project_id = get_project_id(project)
+        organization_id = org["organization_id"]
+        project_id = project["project_id"]
 
     if not organization_id:
         organizations = fetch_organizations(client)
         if len(organizations) == 1:
             org = organizations[0]
-            organization_id = get_organization_id(org)
+            organization_id = org["organization_id"]
         else:
             raise click.ClickException(_organization_help(organizations))
 
     if not require_project:
         return context_store.ActiveContext(
             organization_id=organization_id,
-            organization_name=get_organization_name(org)
+            organization_name=(org["detail"]["name"] if org else None)
             or _saved_name(saved, "organization", organization_id),
         )
 
@@ -196,37 +243,18 @@ def resolve_context(
             projects = fetch_projects(client, organization_id)
             if len(projects) == 1:
                 project = projects[0]
-                project_id = get_project_id(project)
+                project_id = project["project_id"]
             else:
                 raise click.ClickException(_project_help(projects, organization_id))
 
     return context_store.ActiveContext(
         organization_id=organization_id,
         project_id=project_id,
-        organization_name=get_organization_name(org)
+        organization_name=(org["detail"]["name"] if org else None)
         or _saved_name(saved, "organization", organization_id),
-        project_name=get_project_name(project)
+        project_name=(project["project_name"] if project else None)
         or _saved_name(saved, "project", project_id),
     )
-
-
-def _find_one_by_name(
-    items: list[dict[str, Any]],
-    name: str,
-    entity_name: str,
-) -> dict[str, Any]:
-    exact = [
-        item
-        for item in items
-        if (display_name(item) or "").casefold() == name.casefold()
-    ]
-    if len(exact) == 1:
-        return exact[0]
-    if len(exact) > 1:
-        raise click.ClickException(
-            f"Multiple {entity_name}s named {name!r}; pass the ID instead."
-        )
-    raise click.ClickException(f"No {entity_name} named {name!r} was found.")
 
 
 def _find_project_across_organizations(
@@ -237,16 +265,13 @@ def _find_project_across_organizations(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     matches: list[tuple[dict[str, Any], dict[str, Any]]] = []
     for organization in fetch_organizations(client):
-        oid = get_organization_id(organization)
-        if not oid:
-            continue
+        oid = organization["organization_id"]
         for project in fetch_projects(client, oid):
-            if project_id and get_project_id(project) == project_id:
+            if project_id and project["project_id"] == project_id:
                 matches.append((organization, project))
             elif (
                 project_name
-                and (get_project_name(project) or "").casefold()
-                == project_name.casefold()
+                and project["project_name"].casefold() == project_name.casefold()
             ):
                 matches.append((organization, project))
 
@@ -277,7 +302,7 @@ def _project_help(projects: list[dict[str, Any]], organization_id: str) -> str:
     choices = "\n".join(f"  {project_label(project)}" for project in projects[:10])
     return (
         "No project selected. Run `judgment context set`, pass --project-id, "
-        "or set JUDGMENT_PROJECT_ID.\n\nMost-used projects:\n"
+        "or set JUDGMENT_PROJECT_ID.\n\nProjects:\n"
         f"{choices}"
     )
 

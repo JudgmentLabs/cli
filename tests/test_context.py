@@ -121,7 +121,7 @@ def test_env_org_does_not_reuse_saved_project_from_other_org(
     client = FakeClient(
         {
             ("GET", "/projects:org-env"): {
-                "projects": [{"project_id": "project-env", "name": "Env Project"}]
+                "projects": [_project("project-env", "Env Project")]
             }
         }
     )
@@ -137,18 +137,14 @@ def test_resolve_context_finds_project_name_across_orgs() -> None:
         {
             ("GET", "/organizations"): {
                 "organizations": [
-                    {"organization_id": "org-1", "detail": {"name": "First"}},
-                    {"organization_id": "org-2", "detail": {"name": "Second"}},
+                    _organization("org-1", "First"),
+                    _organization("org-2", "Second"),
                 ]
             },
             ("GET", "/projects:org-1"): {"projects": []},
             ("GET", "/projects:org-2"): {
                 "projects": [
-                    {
-                        "project_id": "project-2",
-                        "name": "Production",
-                        "total_traces": 100,
-                    }
+                    _project("project-2", "Production", total_traces=100)
                 ]
             },
         }
@@ -165,10 +161,7 @@ def test_resolve_context_finds_project_name_across_orgs() -> None:
 
 
 def test_organization_label_uses_nested_detail_name() -> None:
-    organization = {
-        "organization_id": "org-1",
-        "detail": {"name": "Nested Org"},
-    }
+    organization = _organization("org-1", "Nested Org")
 
     assert organization_label(organization) == "Nested Org  org-1"
 
@@ -178,10 +171,7 @@ def test_resolve_context_matches_nested_organization_name() -> None:
         {
             ("GET", "/organizations"): {
                 "organizations": [
-                    {
-                        "organization_id": "org-1",
-                        "detail": {"name": "Nested Org"},
-                    }
+                    _organization("org-1", "Nested Org"),
                 ]
             }
         }
@@ -255,6 +245,31 @@ def test_generated_command_uses_saved_context(monkeypatch, tmp_path: Path) -> No
     }
 
 
+def test_agent_threads_list_accepts_plain_string_filters(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    fake = _patch_cli_client(monkeypatch)
+    monkeypatch.setattr(
+        config, "credentials_path", lambda: tmp_path / "credentials.json"
+    )
+    monkeypatch.setenv("JUDGMENT_ORG_ID", "org-env")
+
+    result = CliRunner().invoke(
+        cli,
+        ["agent-threads", "list", "project-pos", "--agent-type", "global_copilot",
+         "--agent-name", "my-agent", "-o", "json"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert fake.calls[-1][3] == {
+        "organization_id": "org-env",
+        "project_id": "project-pos",
+        "agent_type": "global_copilot",
+        "agent_name": "my-agent",
+    }
+
+
 def test_context_set_saves_most_used_project_first(
     monkeypatch,
     tmp_path: Path,
@@ -264,14 +279,12 @@ def test_context_set_saves_most_used_project_first(
         FakeClient(
             {
                 ("GET", "/organizations"): {
-                    "organizations": [
-                        {"organization_id": "org-1", "detail": {"name": "Acme"}}
-                    ]
+                    "organizations": [_organization("org-1", "Acme")]
                 },
                 ("GET", "/projects:org-1"): {
                     "projects": [
-                        {"project_id": "low", "name": "Low", "total_traces": 1},
-                        {"project_id": "high", "name": "High", "total_traces": 10},
+                        _project("low", "Low", total_traces=1),
+                        _project("high", "High", total_traces=10),
                     ]
                 },
             }
@@ -296,14 +309,10 @@ def test_context_set_matches_nested_organization_name(
         FakeClient(
             {
                 ("GET", "/organizations"): {
-                    "organizations": [
-                        {"organization_id": "org-1", "detail": {"name": "Acme"}}
-                    ]
+                    "organizations": [_organization("org-1", "Acme")]
                 },
                 ("GET", "/projects:org-1"): {
-                    "projects": [
-                        {"project_id": "project-1", "project_name": "Production"}
-                    ]
+                    "projects": [_project("project-1", "Production")]
                 },
             }
         ),
@@ -318,6 +327,28 @@ def test_context_set_matches_nested_organization_name(
     saved = context_store.load_context()
     assert saved["organization_name"] == "Acme"
     assert saved["project_name"] == "Production"
+
+
+def _organization(organization_id: str, name: str) -> dict[str, object]:
+    return {"organization_id": organization_id, "detail": {"name": name}}
+
+
+def _project(
+    project_id: str,
+    project_name: str,
+    *,
+    total_traces: int | None = None,
+    is_favorited: bool = False,
+) -> dict[str, object]:
+    project = {
+        "project_id": project_id,
+        "project_name": project_name,
+    }
+    if total_traces is not None:
+        project["total_traces"] = total_traces
+    if is_favorited:
+        project["is_favorited"] = is_favorited
+    return project
 
 
 def _patch_cli_client(monkeypatch: Any, fake: FakeClient | None = None) -> FakeClient:

@@ -9,12 +9,9 @@ from judgment_cli.client import JudgmentClient
 from judgment_cli import config
 from judgment_cli import context as context_store
 from judgment_cli.context_entities import (
-    active_context_from_items,
-    display_name,
-    organization_id as get_organization_id,
     organization_label,
-    project_id as get_project_id,
     project_label,
+    trace_count,
 )
 from judgment_cli.context_resolver import (
     fetch_organizations,
@@ -237,14 +234,17 @@ def context_set(
 
     organizations = fetch_organizations(client)
     selected_org = _select_organization(organizations, organization_id, organization)
-    selected_org_id = get_organization_id(selected_org)
-    if not selected_org_id:
-        raise click.ClickException("Selected organization is missing an ID.")
+    selected_org_id = selected_org["organization_id"]
 
     projects = fetch_projects(client, selected_org_id)
     selected_project = _select_project(projects, project_id, project)
 
-    active = active_context_from_items(selected_org, selected_project)
+    active = context_store.ActiveContext(
+        organization_id=selected_org_id,
+        organization_name=selected_org["detail"]["name"],
+        project_id=selected_project["project_id"],
+        project_name=selected_project["project_name"],
+    )
     path = context_store.save_context(active)
     _echo_active_context(active, path)
 
@@ -277,9 +277,23 @@ def _select_organization(
     organization_name: str | None,
 ) -> dict:
     if organization_id:
-        return _match_by_id(organizations, organization_id, "organization")
+        for organization in organizations:
+            if organization["organization_id"] == organization_id:
+                return organization
+        raise click.ClickException(f"No organization matched ID {organization_id!r}.")
     if organization_name:
-        return _match_by_name(organizations, organization_name, "organization")
+        matches = [
+            organization
+            for organization in organizations
+            if organization["detail"]["name"].casefold() == organization_name.casefold()
+        ]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise click.ClickException(
+                f"Multiple organizations named {organization_name!r}; pass the ID instead."
+            )
+        raise click.ClickException(f"No organization named {organization_name!r}.")
     if not organizations:
         raise click.ClickException("No organizations were found for this account.")
     if len(organizations) == 1:
@@ -300,9 +314,23 @@ def _select_project(
     project_name: str | None,
 ) -> dict:
     if project_id:
-        return _match_by_id(projects, project_id, "project")
+        for project in projects:
+            if project["project_id"] == project_id:
+                return project
+        raise click.ClickException(f"No project matched ID {project_id!r}.")
     if project_name:
-        return _match_by_name(projects, project_name, "project")
+        matches = [
+            project
+            for project in projects
+            if project["project_name"].casefold() == project_name.casefold()
+        ]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise click.ClickException(
+                f"Multiple projects named {project_name!r}; pass the ID instead."
+            )
+        raise click.ClickException(f"No project named {project_name!r}.")
     if not projects:
         raise click.ClickException("No projects were found in this organization.")
     if len(projects) == 1:
@@ -310,36 +338,19 @@ def _select_project(
         click.echo(f"Using project: {project_label(selected)}")
         return selected
 
+    projects = sorted(
+        projects,
+        key=lambda project: (
+            -int(bool(project.get("is_favorited"))),
+            -(trace_count(project) or 0),
+            project["project_name"].casefold(),
+        ),
+    )
     return select_item(
         "Projects (sorted by trace volume)",
         projects,
         label=project_label,
     )
-
-
-def _match_by_id(items: list[dict], value: str, entity_name: str) -> dict:
-    get_id = get_organization_id if entity_name == "organization" else get_project_id
-    matches = [item for item in items if get_id(item) == value]
-    if len(matches) == 1:
-        return matches[0]
-    if len(matches) > 1:
-        raise click.ClickException(f"Multiple {entity_name}s matched ID {value!r}.")
-    raise click.ClickException(f"No {entity_name} matched ID {value!r}.")
-
-
-def _match_by_name(items: list[dict], value: str, entity_name: str) -> dict:
-    matches = [
-        item
-        for item in items
-        if (display_name(item) or "").casefold() == value.casefold()
-    ]
-    if len(matches) == 1:
-        return matches[0]
-    if len(matches) > 1:
-        raise click.ClickException(
-            f"Multiple {entity_name}s named {value!r}; pass the ID instead."
-        )
-    raise click.ClickException(f"No {entity_name} named {value!r}.")
 
 
 def _echo_active_context(active: context_store.ActiveContext, path) -> None:
