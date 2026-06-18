@@ -174,6 +174,11 @@ def cli_option_name(name: str) -> str:
     return s.lower().replace("_", "-")
 
 
+def cli_arg_metavar(name: str) -> str:
+    """Render a schema field name as a Click usage placeholder."""
+    return cli_option_name(name).replace("-", "_").upper()
+
+
 def py_var_name(name: str) -> str:
     """Coerce *name* into a valid (non-reserved) Python identifier."""
     s = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name)
@@ -317,6 +322,33 @@ def click_param_args(
     return f", {', '.join(args)}" if args else ""
 
 
+def contextual_args_metavar(
+    positional_names: list[str],
+    *,
+    needs_organization_id: bool,
+    needs_project_id: bool,
+) -> str:
+    """Render the contextual catch-all argument's usage string.
+
+    Generated commands use one ``nargs=-1`` argument so users can optionally
+    pass leading context IDs before the command's own positional values. The
+    parser accepts:
+
+    * ``[ORG_ID]`` for org-scoped commands
+    * ``[[ORG_ID] PROJECT_ID]`` for project-scoped commands
+    * the OpenAPI-derived command positional fields after those context IDs
+    """
+    parts: list[str] = []
+    if needs_organization_id and needs_project_id:
+        parts.append("[[ORG_ID] PROJECT_ID]")
+    elif needs_project_id:
+        parts.append("[PROJECT_ID]")
+    elif needs_organization_id:
+        parts.append("[ORG_ID]")
+    parts.extend(cli_arg_metavar(name) for name in positional_names)
+    return " ".join(parts)
+
+
 def extract_json_body_properties(operation: dict) -> list[dict[str, Any]]:
     request_body = operation.get("requestBody") or {}
     json_content = (request_body.get("content") or {}).get(
@@ -428,7 +460,14 @@ def generate_command_code(
                 '@click.option("--project", "project_name_option", default=None, '
                 'help="Project name to resolve.")'
             )
-        lines.append('@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")')
+        metavar = contextual_args_metavar(
+            positional_names,
+            needs_organization_id=needs_organization_id,
+            needs_project_id=needs_project_id,
+        )
+        lines.append(
+            f'@click.argument("_args", nargs=-1, metavar={metavar!r})'
+        )
     else:
         for pp in path_params:
             lines.append(f'@click.argument("{pp}")')

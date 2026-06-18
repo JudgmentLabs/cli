@@ -28,7 +28,7 @@ def agent_threads_group() -> None:
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] THREAD_ID')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
 def agent_threads_get(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
@@ -65,7 +65,7 @@ def agent_threads_get(ctx, _args, output_format, organization_id_option, organiz
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID]')
 @click.option("--agent-type", "agent_type", required=True, type=click.Choice(['global_copilot', 'custom_agent']), help='Active agent thread kinds available for new conversations: `global_copilot` or `custom_agent`.')
 @click.option("--agent-name", "agent_name", required=True)
 @click.option("--judge-id", "judge_id", default=None, help='Restrict to threads associated with this judge.')
@@ -138,7 +138,7 @@ def automations_group() -> None:
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] NAME')
 @click.option("--description", "description", default=None, help='Human-readable description shown in the UI.')
 @click.option("--conditions", "conditions", required=True, help='JSON array of rule conditions. Each condition references a named metric/scorer on the project and a comparison. Items are ANDed or ORed together based on `combine_type` (`all` vs `any`).\n\n**Condition shape:**\n```\n{\n  "metric": {\n    "scorer_type": "behavior" | "judge" | "prompt" | "custom" | "static" | "span_attribute" | "error",\n    "name": "<scorer or metric name>",\n    "threshold": <number | string | null>?\n  },\n  "comparison": "lt" | "gt" | "eq" | "gte" | "lte" | "fails" | "succeeds" | "chooses" | "detected" | "equals" | "contains" | "exists"\n}\n```\n\n**Common scorer_type values:**\n- `behavior` — Judge-scored behavior (name = behavior name, e.g. "Relevance")\n- `static` — Built-in metrics like "duration" (ms) or "llm_cost" (USD)\n- `prompt`/`custom` — Prompt or custom scorer by name\n- `span_attribute` — Arbitrary span attribute key (name = attribute key)\n- `error` — Span error condition')
 @click.option("--combine-type", "combine_type", required=True, type=click.Choice(['all', 'any']))
@@ -191,7 +191,7 @@ def automations_create(ctx, _args, output_format, organization_id_option, organi
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] RULE_ID')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
 def automations_delete(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
@@ -228,7 +228,7 @@ def automations_delete(ctx, _args, output_format, organization_id_option, organi
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] RULE_ID')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
 def automations_get(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
@@ -265,7 +265,7 @@ def automations_get(ctx, _args, output_format, organization_id_option, organizat
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID]')
 @click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")
 @click.pass_context
 def automations_list(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
@@ -300,7 +300,7 @@ def automations_list(ctx, _args, output_format, organization_id_option, organiza
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] RULE_ID')
 @click.option("--name", "name", default=None, help='New name for the automation.')
 @click.option("--description", "description", default=None, help='New description for the automation.')
 @click.option("--conditions", "conditions", default=None, help='JSON array of rule conditions. Each condition references a named metric/scorer on the project and a comparison. Items are ANDed or ORed together based on `combine_type` (`all` vs `any`).\n\n**Condition shape:**\n```\n{\n  "metric": {\n    "scorer_type": "behavior" | "judge" | "prompt" | "custom" | "static" | "span_attribute" | "error",\n    "name": "<scorer or metric name>",\n    "threshold": <number | string | null>?\n  },\n  "comparison": "lt" | "gt" | "eq" | "gte" | "lte" | "fails" | "succeeds" | "chooses" | "detected" | "equals" | "contains" | "exists"\n}\n```\n\n**Common scorer_type values:**\n- `behavior` — Judge-scored behavior (name = behavior name, e.g. "Relevance")\n- `static` — Built-in metrics like "duration" (ms) or "llm_cost" (USD)\n- `prompt`/`custom` — Prompt or custom scorer by name\n- `span_attribute` — Arbitrary span attribute key (name = attribute key)\n- `error` — Span error condition')
@@ -371,7 +371,7 @@ def behaviors_group() -> None:
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] NAME PROMPT')
 @click.option("--description", "description", default=None, help='Human-readable description shown in the UI.')
 @click.option("--model", "model", default=None, help='LLM model ID used by the judge prompt. Defaults to "gpt-5.3-codex" when omitted.')
 @click.option("--category-ids", "category_ids", multiple=True, help='UUIDs of categories to attach the behavior to. Pass an array of category UUIDs.')
@@ -425,7 +425,7 @@ def behaviors_create_binary(ctx, _args, output_format, organization_id_option, o
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] NAME PROMPT')
 @click.option("--options", "options", required=True, help='JSON array of the allowed output categories the classifier judge can return. Must contain at least one option.\n\n**Shape:**\n```\n[\n  {"name":"<label>", "description":"<optional human description>", "category_ids":["<uuid>", ...]},\n  ...\n]\n```')
 @click.option("--model", "model", default=None, help='LLM model ID used by the judge prompt. Defaults to "gpt-5.5" when omitted.')
 @click.option("--category-ids", "category_ids", multiple=True, help='UUIDs of categories to attach the behavior to. Pass an array of category UUIDs.')
@@ -478,7 +478,7 @@ def behaviors_create_classifier(ctx, _args, output_format, organization_id_optio
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] BEHAVIOR_ID')
 @click.option("--delete-scorer", "delete_scorer", default=None, type=bool, help='When true, also delete the underlying prompt scorer if no other behaviors reference it.')
 @click.option("--delete-all-values", "delete_all_values", default=None, type=bool, help='For classifier behaviors, when true deletes every category row for this judge (not just the provided behavior_id). Ignored for binary behaviors.')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
@@ -521,7 +521,7 @@ def behaviors_delete(ctx, _args, output_format, organization_id_option, organiza
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] BEHAVIOR_ID')
 @click.option("--start-date", "start_date", default=None, help='Optional ISO 8601 start date for stats.')
 @click.option("--end-date", "end_date", default=None, help='Optional ISO 8601 end date for stats.')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
@@ -564,7 +564,7 @@ def behaviors_get(ctx, _args, output_format, organization_id_option, organizatio
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID]')
 @click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")
 @click.pass_context
 def behaviors_list(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
@@ -599,7 +599,7 @@ def behaviors_list(ctx, _args, output_format, organization_id_option, organizati
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] BEHAVIOR_ID')
 @click.option("--description", "description", default=None, help='New human-readable description for the behavior.')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
@@ -684,7 +684,7 @@ def judges_group() -> None:
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] NAME MODEL PROMPT')
 @click.option("--judge-description", "judge_description", default=None, help='Human-readable description shown in the UI.')
 @click.option("--description", "description", default=None, help='Description stored on the underlying scorer version.')
 @click.option("--score-type", "score_type", required=True, type=click.Choice(['numeric', 'binary', 'categorical']))
@@ -745,7 +745,7 @@ def judges_create(ctx, _args, output_format, organization_id_option, organizatio
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID]')
 @click.option("--judge-ids", "judge_ids", multiple=True, required=True, help='Judge UUIDs to delete.')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
@@ -783,7 +783,7 @@ def judges_delete(ctx, _args, output_format, organization_id_option, organizatio
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] JUDGE_ID')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
 def judges_get(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
@@ -820,7 +820,7 @@ def judges_get(ctx, _args, output_format, organization_id_option, organization_n
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] JUDGE_ID')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
 def judges_get_settings(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
@@ -857,7 +857,7 @@ def judges_get_settings(ctx, _args, output_format, organization_id_option, organ
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID]')
 @click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")
 @click.pass_context
 def judges_list(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
@@ -890,7 +890,7 @@ def judges_list(ctx, _args, output_format, organization_id_option, organization_
 @judges_group.command("models")
 @click.option("--organization-id", "--org-id", "organization_id_option", default=None, help="Organization ID. Defaults to JUDGMENT_ORG_ID or saved context.")
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[ORG_ID]')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
 def judges_models(ctx, _args, output_format, organization_id_option, organization_name_option):
@@ -921,7 +921,7 @@ def judges_models(ctx, _args, output_format, organization_id_option, organizatio
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] JUDGE_ID TAG')
 @click.option("--major-version", "major_version", required=True, type=float, help='Judge version to tag.')
 @click.option("--minor-version", "minor_version", required=True, type=float, help='Judge version to tag.')
 @click.option("--action", "action", required=True, type=click.Choice(['add', 'remove']))
@@ -966,7 +966,7 @@ def judges_set_tag(ctx, _args, output_format, organization_id_option, organizati
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] JUDGE_ID')
 @click.option("--judge-description", "judge_description", default=None, help='New UI description (pass null to clear).')
 @click.option("--score-type", "score_type", default=None, type=click.Choice(['numeric', 'binary', 'categorical']))
 @click.option("--description", "description", default=None, help='New scorer-version description (pass null to clear).')
@@ -1045,7 +1045,7 @@ def judges_update(ctx, _args, output_format, organization_id_option, organizatio
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] JUDGE_ID')
 @click.option("--evaluation-mode", "evaluation_mode", required=True, type=click.Choice(['continuous', 'on_demand']))
 @click.option("--sampling-rate", "sampling_rate", required=True, type=float, help='Percent (0–100) of qualifying spans to score.')
 @click.option("--span-triggers", "span_triggers", default=None, help='JSON array of span filters that restrict which spans the judge evaluates. Pass `[]` to evaluate all spans.\n\n**Shape:**\n```\n[\n  {\n    "field": "span_name" | "span_attribute",\n    "operator": "contains" | "equals" | "exists",\n    "value": "<string>",\n    "key": "<attribute key>"?\n  },\n  ...\n]\n```\n\nUse `field: "span_name"` to match on span names; `field: "span_attribute"` with `key: "<attr>"` to match on a span attribute\'s value. Triggers are ANDed together — a span must match every entry to be evaluated.')
@@ -1121,7 +1121,7 @@ def projects_group() -> None:
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID]')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
 def projects_add_favorite(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
@@ -1154,7 +1154,7 @@ def projects_add_favorite(ctx, _args, output_format, organization_id_option, org
 @projects_group.command("create")
 @click.option("--organization-id", "--org-id", "organization_id_option", default=None, help="Organization ID. Defaults to JUDGMENT_ORG_ID or saved context.")
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[ORG_ID] PROJECT_NAME')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
 def projects_create(ctx, _args, output_format, organization_id_option, organization_name_option):
@@ -1187,7 +1187,7 @@ def projects_create(ctx, _args, output_format, organization_id_option, organizat
 @projects_group.command("list")
 @click.option("--organization-id", "--org-id", "organization_id_option", default=None, help="Organization ID. Defaults to JUDGMENT_ORG_ID or saved context.")
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[ORG_ID]')
 @click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")
 @click.pass_context
 def projects_list(ctx, _args, output_format, organization_id_option, organization_name_option):
@@ -1218,7 +1218,7 @@ def projects_list(ctx, _args, output_format, organization_id_option, organizatio
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID]')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
 def projects_remove_favorite(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
@@ -1263,7 +1263,7 @@ def prompts_group() -> None:
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] PROMPT_NAME PROMPT')
 @click.option("--tags", "tags", multiple=True, help='Optional tags (e.g. `production`, `staging`) to apply to the new commit. Tags move from any previous commit to this one.')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
@@ -1305,7 +1305,7 @@ def prompts_commit(ctx, _args, output_format, organization_id_option, organizati
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] PROMPT_NAME')
 @click.option("--commit-id", "commit_id", default=None, help='Specific commit SHA to fetch. Mutually exclusive with `tag`. When neither is provided the latest commit is returned.')
 @click.option("--tag", "tag", default=None, help='Tag to fetch (e.g. `production`). Mutually exclusive with `commit_id`.')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
@@ -1348,7 +1348,7 @@ def prompts_get(ctx, _args, output_format, organization_id_option, organization_
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID]')
 @click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")
 @click.pass_context
 def prompts_list(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
@@ -1383,7 +1383,7 @@ def prompts_list(ctx, _args, output_format, organization_id_option, organization
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] PROMPT_NAME COMMIT_ID')
 @click.option("--tags", "tags", multiple=True, required=True, help='Tag names to add. Each tag is unique per prompt — re-tagging moves the tag to the new commit.')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
@@ -1425,7 +1425,7 @@ def prompts_tag(ctx, _args, output_format, organization_id_option, organization_
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] PROMPT_NAME')
 @click.option("--tags", "tags", multiple=True, required=True, help='Tag names to remove from this prompt.')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
@@ -1465,7 +1465,7 @@ def prompts_untag(ctx, _args, output_format, organization_id_option, organizatio
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] PROMPT_NAME')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
 def prompts_versions(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
@@ -1512,7 +1512,7 @@ def sessions_group() -> None:
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] SESSION_ID')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
 def sessions_get(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
@@ -1549,7 +1549,7 @@ def sessions_get(ctx, _args, output_format, organization_id_option, organization
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID]')
 @click.option("--filters", "filters", required=True, help='Filter expressions, ANDed together. Each item is `{"field":<field>,"op":<op>,"value":<value>}`. Allowed ops depend on the field\'s type.\n\n**Op groups:**\n- `STRING_OPS` = `=` | `!=` | `contains` | `does_not_contain`\n- `NUMERIC_OPS` = `=` | `!=` | `<` | `<=` | `>` | `>=`\n- `ARRAY_ANY` = `any` (matches when the row\'s array overlaps the supplied values)\n\n**String fields** (op in STRING_OPS, value is a string): `session_id`.\n\n**Numeric fields** (op in NUMERIC_OPS, value is a number): `trace_count`, `latency` (nanoseconds), `total_cost` (USD).\n\n**Array fields** (op = `any`, value is an array): `behaviors` (behavior UUIDs).')
 @click.option("--time-range", "time_range", default=None, help='`{"start_time":<iso8601-string>|null,"end_time":<iso8601-string>|null}`. Either bound may be null to leave that side open. Invalid timestamps return 400.')
 @click.option("--pagination", "pagination", required=True, help='`{"limit":<int 1-200>,"cursorSortValue":<string>|null,"cursorItemId":<string>|null}`.\n\nFirst page: pass null for both cursor fields. Each response returns `nextCursor:{sort_value,session_id}` (or null when `hasMore=false`); copy those into `cursorSortValue` and `cursorItemId` for the next page.')
@@ -1594,7 +1594,7 @@ def sessions_search(ctx, _args, output_format, organization_id_option, organizat
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] SESSION_ID')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
 def sessions_trace_behaviors(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
@@ -1631,7 +1631,7 @@ def sessions_trace_behaviors(ctx, _args, output_format, organization_id_option, 
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] SESSION_ID')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
 def sessions_trace_ids(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
@@ -1678,7 +1678,7 @@ def traces_group() -> None:
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] TRACE_ID')
 @click.option("--tags", "tags", multiple=True, required=True, help='String tags to attach to the trace. Tags are additive — existing tags on the trace are preserved.')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
@@ -1718,7 +1718,7 @@ def traces_add_tags(ctx, _args, output_format, organization_id_option, organizat
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] TRACE_ID')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
 def traces_behaviors(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
@@ -1755,7 +1755,7 @@ def traces_behaviors(ctx, _args, output_format, organization_id_option, organiza
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID]')
 @click.option("--evaluate-all", "evaluate_all", default=None, type=bool, help='When true, re-evaluate every trace in the project. Mutually exclusive with `trace_ids`.')
 @click.option("--trace-ids", "trace_ids", multiple=True, help='Trace UUIDs to re-evaluate. Mutually exclusive with `evaluate_all`.')
 @click.option("--specific-judge-names", "specific_judge_names", multiple=True, help='Restrict evaluation to judges with these names. Omit to run every applicable judge.')
@@ -1799,7 +1799,7 @@ def traces_evaluate(ctx, _args, output_format, organization_id_option, organizat
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] TRACE_ID')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
 def traces_get(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
@@ -1836,7 +1836,7 @@ def traces_get(ctx, _args, output_format, organization_id_option, organization_n
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID]')
 @click.option("--filters", "filters", default=None, help='Filter expressions, ANDed together. Each item is `{"field":<field>,"op":<op>,"value":<value>}`. Allowed ops depend on the field\'s type.\n\n**Op groups:**\n- `STRING_OPS` = `=` | `!=` | `contains` | `does_not_contain` | `exists` | `is_absent`\n- `NUMERIC_OPS` = `=` | `!=` | `<` | `<=` | `>` | `>=`\n- `ARRAY_ANY` = `any` (matches when the row\'s array overlaps the supplied values)\n\n**String fields** (op in STRING_OPS, value is a string): `span_name`, `customer_id`, `customer_user_id`, `session_id`, `error`, `dataset_id`.\n\n**Numeric fields** (op in NUMERIC_OPS, value is a number): `duration` (nanoseconds), `llm_cost` (USD).\n\n**Array fields** (op = `any`, value is an array): `tags` (strings), `rules_invoked` (rule names from this project, strings), `behaviors` (behavior UUIDs).\n\n**Special:**\n- `full_text_search`: op = `contains`, value is a string searched across span attribute text.\n- `span_attributes_roots`: matches a single span attribute key/value: `{"field":"span_attributes_roots","key":"<attribute-name>","op":<STRING_OPS>,"value":"<string>"}`')
 @click.option("--sort-by", "sort_by", default=None, help='`{"field":<sort_field>,"direction":"asc"|"desc"}` where `sort_field` is one of: `created_at`, `span_name`, `duration`, `llm_cost`. Default when omitted: `{"field":"created_at","direction":"desc"}`. Any sort other than `created_at` desc requires `time_range.start_time` and a window between `start_time` and `end_time` of at most 7 days; use `created_at` desc sorting for broader ranges.')
 @click.option("--time-range", "time_range", default=None, help='`{"start_time":<iso8601-string>|null,"end_time":<iso8601-string>|null}`. Either bound may be null to leave that side open. Invalid timestamps return 400. For any sort other than `created_at` desc, `start_time` is required and the window between `start_time` and `end_time` must be at most 7 days.')
@@ -1882,7 +1882,7 @@ def traces_search(ctx, _args, output_format, organization_id_option, organizatio
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID]')
 @click.option("--spans", "spans", required=True, help='Up to 20 trace/span ID pairs to fetch span details for in a single request.')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
@@ -1919,7 +1919,7 @@ def traces_span(ctx, _args, output_format, organization_id_option, organization_
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] TRACE_ID')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
 def traces_spans(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
@@ -1956,7 +1956,7 @@ def traces_spans(ctx, _args, output_format, organization_id_option, organization
 @click.option("--organization", "--org", "organization_name_option", default=None, help="Organization name to resolve.")
 @click.option("--project-id", "project_id_option", default=None, help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")
 @click.option("--project", "project_name_option", default=None, help="Project name to resolve.")
-@click.argument("_args", nargs=-1, metavar="[ID_OR_ARG]")
+@click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID] TRACE_ID')
 @click.option("-o", "--output", "output_format", type=click.Choice(["yaml", "json"]), default="yaml", help="Output format.")
 @click.pass_context
 def traces_tags(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option):
