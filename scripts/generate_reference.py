@@ -7,7 +7,7 @@ locally to preview, or from CI to publish into the docs repo's
 ``content/docs/cli-reference/`` tree.
 
 Source of truth lives in ``src/judgment_cli/main.py`` and
-``src/judgment_cli/generated_commands.py``; this script is a thin
+``src/judgment_cli/generated/commands.py``; this script is a thin
 renderer that introspects ``Click.Command``/``Click.Group`` objects.
 
 Usage::

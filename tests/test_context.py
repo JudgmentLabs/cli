@@ -9,7 +9,6 @@ from click.testing import CliRunner
 
 from judgment_cli import config
 from judgment_cli import context as context_store
-from judgment_cli.context_entities import organization_label
 from judgment_cli.context_resolver import (
     parse_contextual_positionals,
     resolve_context,
@@ -29,7 +28,6 @@ def isolate_context_state(
         lambda: tmp_path / "credentials.json",
     )
     monkeypatch.delenv("JUDGMENT_ORG_ID", raising=False)
-    monkeypatch.delenv("JUDGMENT_ORGANIZATION_ID", raising=False)
     monkeypatch.delenv("JUDGMENT_PROJECT_ID", raising=False)
 
 
@@ -158,12 +156,6 @@ def test_resolve_context_finds_project_name_across_orgs() -> None:
 
     assert active.organization_id == "org-2"
     assert active.project_id == "project-2"
-
-
-def test_organization_label_uses_nested_detail_name() -> None:
-    organization = _organization("org-1", "Nested Org")
-
-    assert organization_label(organization) == "Nested Org  org-1"
 
 
 def test_resolve_context_matches_nested_organization_name() -> None:
@@ -337,18 +329,24 @@ def _project(
     project_id: str,
     project_name: str,
     *,
+    organization_id: str = "org-1",
     total_traces: int | None = None,
     is_favorited: bool = False,
 ) -> dict[str, object]:
-    project = {
+    return {
+        "organization_id": organization_id,
         "project_id": project_id,
         "project_name": project_name,
+        "first_name": None,
+        "last_name": None,
+        "updated_at": None,
+        "total_datasets": None,
+        "total_experiment_runs": None,
+        "total_traces": total_traces,
+        "total_behaviors": None,
+        "negative_binary_count": None,
+        "is_favorited": is_favorited,
     }
-    if total_traces is not None:
-        project["total_traces"] = total_traces
-    if is_favorited:
-        project["is_favorited"] = is_favorited
-    return project
 
 
 def _patch_cli_client(monkeypatch: Any, fake: FakeClient | None = None) -> FakeClient:

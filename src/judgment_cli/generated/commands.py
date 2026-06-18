@@ -7,6 +7,7 @@ import json
 
 import click
 
+from judgment_cli.generated import api as _api
 from judgment_cli.context_resolver import parse_contextual_positionals as _parse_contextual_positionals
 from judgment_cli.context_resolver import resolve_context as _resolve_context
 from judgment_cli.ui import table_output as _table_output, yaml_output as _yaml_output
@@ -51,12 +52,11 @@ def agent_threads_get(ctx, _args, output_format, organization_id_option, organiz
     organization_id = _context.organization_id
     project_id = _context.project_id
     thread_id = _parsed.values["thread_id"]
-    url = "/agent-threads/get"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
     body["thread_id"] = thread_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.agent_threads_get(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -98,7 +98,6 @@ def agent_threads_list(ctx, _args, output_format, organization_id_option, organi
     )
     organization_id = _context.organization_id
     project_id = _context.project_id
-    url = "/agent-threads/list"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
@@ -120,7 +119,7 @@ def agent_threads_list(ctx, _args, output_format, organization_id_option, organi
         body["cursor_updated_at"] = cursor_updated_at
     if cursor_thread_id is not None:
         body["cursor_thread_id"] = cursor_thread_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.agent_threads_list(ctx.obj["client"], body)
     _table_output(result, output_format=output_format)
 
 
@@ -169,7 +168,6 @@ def automations_create(ctx, _args, output_format, organization_id_option, organi
     organization_id = _context.organization_id
     project_id = _context.project_id
     name = _parsed.values["name"]
-    url = "/automations/create"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
@@ -184,7 +182,7 @@ def automations_create(ctx, _args, output_format, organization_id_option, organi
         body["cooldown_period"] = json.loads(cooldown_period)
     if trigger_frequency is not None:
         body["trigger_frequency"] = json.loads(trigger_frequency)
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.automations_create(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -217,12 +215,11 @@ def automations_delete(ctx, _args, output_format, organization_id_option, organi
     organization_id = _context.organization_id
     project_id = _context.project_id
     rule_id = _parsed.values["rule_id"]
-    url = "/automations/delete"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
     body["rule_id"] = rule_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.automations_delete(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -255,12 +252,11 @@ def automations_get(ctx, _args, output_format, organization_id_option, organizat
     organization_id = _context.organization_id
     project_id = _context.project_id
     rule_id = _parsed.values["rule_id"]
-    url = "/automations/detail"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
     body["rule_id"] = rule_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.automations_get(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -292,11 +288,10 @@ def automations_list(ctx, _args, output_format, organization_id_option, organiza
     )
     organization_id = _context.organization_id
     project_id = _context.project_id
-    url = "/automations/list"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.automations_list(ctx.obj["client"], body)
     _table_output(result, output_format=output_format)
 
 
@@ -337,7 +332,6 @@ def automations_update(ctx, _args, output_format, organization_id_option, organi
     organization_id = _context.organization_id
     project_id = _context.project_id
     rule_id = _parsed.values["rule_id"]
-    url = "/automations/update"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
@@ -358,7 +352,7 @@ def automations_update(ctx, _args, output_format, organization_id_option, organi
         body["cooldown_period"] = json.loads(cooldown_period)
     if trigger_frequency is not None:
         body["trigger_frequency"] = json.loads(trigger_frequency)
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.automations_update(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -407,7 +401,6 @@ def behaviors_create_binary(ctx, _args, output_format, organization_id_option, o
     project_id = _context.project_id
     name = _parsed.values["name"]
     prompt = _parsed.values["prompt"]
-    url = "/behaviors/create-binary"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
@@ -423,7 +416,7 @@ def behaviors_create_binary(ctx, _args, output_format, organization_id_option, o
         body["advanced_settings"] = json.loads(advanced_settings)
     if judge_id is not None:
         body["judge_id"] = judge_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.behaviors_create_binary(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -462,7 +455,6 @@ def behaviors_create_classifier(ctx, _args, output_format, organization_id_optio
     project_id = _context.project_id
     name = _parsed.values["name"]
     prompt = _parsed.values["prompt"]
-    url = "/behaviors/create-classifier"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
@@ -477,7 +469,7 @@ def behaviors_create_classifier(ctx, _args, output_format, organization_id_optio
         body["advanced_settings"] = json.loads(advanced_settings)
     if judge_id is not None:
         body["judge_id"] = judge_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.behaviors_create_classifier(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -512,7 +504,6 @@ def behaviors_delete(ctx, _args, output_format, organization_id_option, organiza
     organization_id = _context.organization_id
     project_id = _context.project_id
     behavior_id = _parsed.values["behavior_id"]
-    url = "/behaviors/delete"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
@@ -521,7 +512,7 @@ def behaviors_delete(ctx, _args, output_format, organization_id_option, organiza
         body["delete_scorer"] = delete_scorer
     if delete_all_values is not None:
         body["delete_all_values"] = delete_all_values
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.behaviors_delete(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -556,7 +547,6 @@ def behaviors_get(ctx, _args, output_format, organization_id_option, organizatio
     organization_id = _context.organization_id
     project_id = _context.project_id
     behavior_id = _parsed.values["behavior_id"]
-    url = "/behaviors/detail"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
@@ -565,7 +555,7 @@ def behaviors_get(ctx, _args, output_format, organization_id_option, organizatio
         body["start_date"] = start_date
     if end_date is not None:
         body["end_date"] = end_date
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.behaviors_get(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -597,11 +587,10 @@ def behaviors_list(ctx, _args, output_format, organization_id_option, organizati
     )
     organization_id = _context.organization_id
     project_id = _context.project_id
-    url = "/behaviors/list"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.behaviors_list(ctx.obj["client"], body)
     _table_output(result, output_format=output_format)
 
 
@@ -635,14 +624,13 @@ def behaviors_update(ctx, _args, output_format, organization_id_option, organiza
     organization_id = _context.organization_id
     project_id = _context.project_id
     behavior_id = _parsed.values["behavior_id"]
-    url = "/behaviors/update"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
     body["behavior_id"] = behavior_id
     if description is not None:
         body["description"] = description
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.behaviors_update(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -662,10 +650,7 @@ def docs_group() -> None:
 @click.pass_context
 def docs_get_page(ctx, path, output_format):
     'Read a documentation page.\n\n\x08\nFetch the rendered text of a documentation page by its path. Use `docs.search` first to find candidate paths.'
-    url = "/docs/page"
-    params = {}
-    params["path"] = path
-    result = ctx.obj["client"].request("GET", url, params=params)
+    result = _api.docs_get_page(ctx.obj["client"], path)
     _yaml_output(result, output_format=output_format)
 
 
@@ -676,12 +661,11 @@ def docs_get_page(ctx, path, output_format):
 @click.pass_context
 def docs_search(ctx, output_format, query, match_count):
     'Search docs.\n\n\x08\nHybrid (vector + lexical) search over the public Judgment documentation. Returns the top matching headings with full URLs.'
-    url = "/docs/search"
     body = {}
     body["query"] = query
     if match_count is not None:
         body["match_count"] = match_count
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.docs_search(ctx.obj["client"], body)
     _table_output(result, output_format=output_format)
 
 
@@ -733,7 +717,6 @@ def judges_create(ctx, _args, output_format, organization_id_option, organizatio
     name = _parsed.values["name"]
     model = _parsed.values["model"]
     prompt = _parsed.values["prompt"]
-    url = "/judges/create"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
@@ -753,7 +736,7 @@ def judges_create(ctx, _args, output_format, organization_id_option, organizatio
         body["max_score"] = max_score
     if judge_type is not None:
         body["judge_type"] = judge_type
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.judges_create(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -786,13 +769,12 @@ def judges_delete(ctx, _args, output_format, organization_id_option, organizatio
     )
     organization_id = _context.organization_id
     project_id = _context.project_id
-    url = "/judges/delete"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
     if judge_ids:
         body["judge_ids"] = list(judge_ids)
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.judges_delete(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -825,12 +807,11 @@ def judges_get(ctx, _args, output_format, organization_id_option, organization_n
     organization_id = _context.organization_id
     project_id = _context.project_id
     judge_id = _parsed.values["judge_id"]
-    url = "/judges/get"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
     body["judge_id"] = judge_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.judges_get(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -863,12 +844,11 @@ def judges_get_settings(ctx, _args, output_format, organization_id_option, organ
     organization_id = _context.organization_id
     project_id = _context.project_id
     judge_id = _parsed.values["judge_id"]
-    url = "/judges/settings"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
     body["judge_id"] = judge_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.judges_get_settings(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -900,11 +880,10 @@ def judges_list(ctx, _args, output_format, organization_id_option, organization_
     )
     organization_id = _context.organization_id
     project_id = _context.project_id
-    url = "/judges/list"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.judges_list(ctx.obj["client"], body)
     _table_output(result, output_format=output_format)
 
 
@@ -933,10 +912,7 @@ def judges_models(ctx, _args, output_format, organization_id_option, organizatio
         require_project=False,
     )
     organization_id = _context.organization_id
-    url = "/judges/models"
-    params = {}
-    params["organization_id"] = organization_id
-    result = ctx.obj["client"].request("GET", url, params=params)
+    result = _api.judges_models(ctx.obj["client"], organization_id)
     _yaml_output(result, output_format=output_format)
 
 
@@ -973,7 +949,6 @@ def judges_set_tag(ctx, _args, output_format, organization_id_option, organizati
     project_id = _context.project_id
     judge_id = _parsed.values["judge_id"]
     tag = _parsed.values["tag"]
-    url = "/judges/set-tag"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
@@ -982,7 +957,7 @@ def judges_set_tag(ctx, _args, output_format, organization_id_option, organizati
     body["minor_version"] = minor_version
     body["tag"] = tag
     body["action"] = action
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.judges_set_tag(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1029,7 +1004,6 @@ def judges_update(ctx, _args, output_format, organization_id_option, organizatio
     organization_id = _context.organization_id
     project_id = _context.project_id
     judge_id = _parsed.values["judge_id"]
-    url = "/judges/update"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
@@ -1062,7 +1036,7 @@ def judges_update(ctx, _args, output_format, organization_id_option, organizatio
         body["agent_prompts"] = json.loads(agent_prompts)
     if new_behaviors is not None:
         body["new_behaviors"] = json.loads(new_behaviors)
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.judges_update(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1099,7 +1073,6 @@ def judges_update_settings(ctx, _args, output_format, organization_id_option, or
     organization_id = _context.organization_id
     project_id = _context.project_id
     judge_id = _parsed.values["judge_id"]
-    url = "/judges/update-settings"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
@@ -1110,7 +1083,7 @@ def judges_update_settings(ctx, _args, output_format, organization_id_option, or
         body["span_triggers"] = json.loads(span_triggers)
     if session_scoring is not None:
         body["session_scoring"] = session_scoring
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.judges_update_settings(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1129,8 +1102,7 @@ def organizations_group() -> None:
 @click.pass_context
 def organizations_list(ctx, output_format):
     'List organizations.\n\n\x08\nList every organization the authenticated user is a member of. Use the returned `organization_id` as the `organization_id` field on other endpoints.'
-    url = "/organizations"
-    result = ctx.obj["client"].request("GET", url)
+    result = _api.organizations_list(ctx.obj["client"])
     _table_output(result, output_format=output_format)
 
 
@@ -1172,11 +1144,10 @@ def projects_add_favorite(ctx, _args, output_format, organization_id_option, org
     )
     organization_id = _context.organization_id
     project_id = _context.project_id
-    url = "/projects/add-favorite"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.projects_add_favorite(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1206,11 +1177,10 @@ def projects_create(ctx, _args, output_format, organization_id_option, organizat
     )
     organization_id = _context.organization_id
     project_name = _parsed.values["project_name"]
-    url = "/projects/create"
     body = {}
     body["organization_id"] = organization_id
     body["project_name"] = project_name
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.projects_create(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1239,10 +1209,7 @@ def projects_list(ctx, _args, output_format, organization_id_option, organizatio
         require_project=False,
     )
     organization_id = _context.organization_id
-    url = "/projects"
-    params = {}
-    params["organization_id"] = organization_id
-    result = ctx.obj["client"].request("GET", url, params=params)
+    result = _api.projects_list(ctx.obj["client"], organization_id)
     _table_output(result, output_format=output_format)
 
 
@@ -1274,11 +1241,10 @@ def projects_remove_favorite(ctx, _args, output_format, organization_id_option, 
     )
     organization_id = _context.organization_id
     project_id = _context.project_id
-    url = "/projects/remove-favorite"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.projects_remove_favorite(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1323,7 +1289,6 @@ def prompts_commit(ctx, _args, output_format, organization_id_option, organizati
     project_id = _context.project_id
     prompt_name = _parsed.values["prompt_name"]
     prompt = _parsed.values["prompt"]
-    url = "/prompts/commit"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
@@ -1331,7 +1296,7 @@ def prompts_commit(ctx, _args, output_format, organization_id_option, organizati
     body["prompt"] = prompt
     if tags:
         body["tags"] = list(tags)
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.prompts_commit(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1366,7 +1331,6 @@ def prompts_get(ctx, _args, output_format, organization_id_option, organization_
     organization_id = _context.organization_id
     project_id = _context.project_id
     prompt_name = _parsed.values["prompt_name"]
-    url = "/prompts/get"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
@@ -1375,7 +1339,7 @@ def prompts_get(ctx, _args, output_format, organization_id_option, organization_
         body["commit_id"] = commit_id
     if tag is not None:
         body["tag"] = tag
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.prompts_get(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1407,11 +1371,10 @@ def prompts_list(ctx, _args, output_format, organization_id_option, organization
     )
     organization_id = _context.organization_id
     project_id = _context.project_id
-    url = "/prompts/list"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.prompts_list(ctx.obj["client"], body)
     _table_output(result, output_format=output_format)
 
 
@@ -1446,7 +1409,6 @@ def prompts_tag(ctx, _args, output_format, organization_id_option, organization_
     project_id = _context.project_id
     prompt_name = _parsed.values["prompt_name"]
     commit_id = _parsed.values["commit_id"]
-    url = "/prompts/tag"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
@@ -1454,7 +1416,7 @@ def prompts_tag(ctx, _args, output_format, organization_id_option, organization_
     body["commit_id"] = commit_id
     if tags:
         body["tags"] = list(tags)
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.prompts_tag(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1488,14 +1450,13 @@ def prompts_untag(ctx, _args, output_format, organization_id_option, organizatio
     organization_id = _context.organization_id
     project_id = _context.project_id
     prompt_name = _parsed.values["prompt_name"]
-    url = "/prompts/untag"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
     body["prompt_name"] = prompt_name
     if tags:
         body["tags"] = list(tags)
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.prompts_untag(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1528,12 +1489,11 @@ def prompts_versions(ctx, _args, output_format, organization_id_option, organiza
     organization_id = _context.organization_id
     project_id = _context.project_id
     prompt_name = _parsed.values["prompt_name"]
-    url = "/prompts/versions"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
     body["prompt_name"] = prompt_name
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.prompts_versions(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1576,12 +1536,11 @@ def sessions_get(ctx, _args, output_format, organization_id_option, organization
     organization_id = _context.organization_id
     project_id = _context.project_id
     session_id = _parsed.values["session_id"]
-    url = "/sessions/detail"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
     body["session_id"] = session_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.sessions_get(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1617,7 +1576,6 @@ def sessions_search(ctx, _args, output_format, organization_id_option, organizat
     )
     organization_id = _context.organization_id
     project_id = _context.project_id
-    url = "/sessions/search"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
@@ -1627,7 +1585,7 @@ def sessions_search(ctx, _args, output_format, organization_id_option, organizat
     body["pagination"] = json.loads(pagination)
     if sort_by is not None:
         body["sort_by"] = json.loads(sort_by)
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.sessions_search(ctx.obj["client"], body)
     _table_output(result, output_format=output_format)
 
 
@@ -1660,12 +1618,11 @@ def sessions_trace_behaviors(ctx, _args, output_format, organization_id_option, 
     organization_id = _context.organization_id
     project_id = _context.project_id
     session_id = _parsed.values["session_id"]
-    url = "/sessions/trace-behaviors"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
     body["session_id"] = session_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.sessions_trace_behaviors(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1698,12 +1655,11 @@ def sessions_trace_ids(ctx, _args, output_format, organization_id_option, organi
     organization_id = _context.organization_id
     project_id = _context.project_id
     session_id = _parsed.values["session_id"]
-    url = "/sessions/trace-ids"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
     body["session_id"] = session_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.sessions_trace_ids(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1747,14 +1703,13 @@ def traces_add_tags(ctx, _args, output_format, organization_id_option, organizat
     organization_id = _context.organization_id
     project_id = _context.project_id
     trace_id = _parsed.values["trace_id"]
-    url = "/traces/add-tags"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
     body["trace_id"] = trace_id
     if tags:
         body["tags"] = list(tags)
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.traces_add_tags(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1787,12 +1742,11 @@ def traces_behaviors(ctx, _args, output_format, organization_id_option, organiza
     organization_id = _context.organization_id
     project_id = _context.project_id
     trace_id = _parsed.values["trace_id"]
-    url = "/traces/behaviors"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
     body["trace_id"] = trace_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.traces_behaviors(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1827,7 +1781,6 @@ def traces_evaluate(ctx, _args, output_format, organization_id_option, organizat
     )
     organization_id = _context.organization_id
     project_id = _context.project_id
-    url = "/traces/evaluate"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
@@ -1837,7 +1790,7 @@ def traces_evaluate(ctx, _args, output_format, organization_id_option, organizat
         body["trace_ids"] = list(trace_ids)
     if specific_judge_names:
         body["specific_judge_names"] = list(specific_judge_names)
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.traces_evaluate(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1870,12 +1823,11 @@ def traces_get(ctx, _args, output_format, organization_id_option, organization_n
     organization_id = _context.organization_id
     project_id = _context.project_id
     trace_id = _parsed.values["trace_id"]
-    url = "/traces/detail"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
     body["trace_id"] = trace_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.traces_get(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1911,7 +1863,6 @@ def traces_search(ctx, _args, output_format, organization_id_option, organizatio
     )
     organization_id = _context.organization_id
     project_id = _context.project_id
-    url = "/traces/search"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
@@ -1922,7 +1873,7 @@ def traces_search(ctx, _args, output_format, organization_id_option, organizatio
     if time_range is not None:
         body["time_range"] = json.loads(time_range)
     body["pagination"] = json.loads(pagination)
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.traces_search(ctx.obj["client"], body)
     _table_output(result, output_format=output_format)
 
 
@@ -1955,12 +1906,11 @@ def traces_span(ctx, _args, output_format, organization_id_option, organization_
     )
     organization_id = _context.organization_id
     project_id = _context.project_id
-    url = "/traces/span"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
     body["spans"] = json.loads(spans)
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.traces_span(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -1993,12 +1943,11 @@ def traces_spans(ctx, _args, output_format, organization_id_option, organization
     organization_id = _context.organization_id
     project_id = _context.project_id
     trace_id = _parsed.values["trace_id"]
-    url = "/traces/spans"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
     body["trace_id"] = trace_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.traces_spans(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 
@@ -2031,12 +1980,11 @@ def traces_tags(ctx, _args, output_format, organization_id_option, organization_
     organization_id = _context.organization_id
     project_id = _context.project_id
     trace_id = _parsed.values["trace_id"]
-    url = "/traces/tags"
     body = {}
     body["organization_id"] = organization_id
     body["project_id"] = project_id
     body["trace_id"] = trace_id
-    result = ctx.obj["client"].request("POST", url, json_body=body)
+    result = _api.traces_tags(ctx.obj["client"], body)
     _yaml_output(result, output_format=output_format)
 
 

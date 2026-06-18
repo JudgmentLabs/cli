@@ -19,7 +19,6 @@ module is enough to register them.
 
 from __future__ import annotations
 
-import json
 import os
 import re
 from pathlib import Path
@@ -29,7 +28,8 @@ import click
 from judgment_cli import scorer_bundle
 from judgment_cli.client import JudgmentClient
 from judgment_cli.context_resolver import resolve_context
-from judgment_cli.generated_commands import judges_group
+from judgment_cli.generated import api as generated_api
+from judgment_cli.generated.commands import judges_group
 from judgment_cli.ui import error, output, success
 
 
@@ -191,15 +191,12 @@ def judges_upload(
             for c in parsed.categories
         ]
 
-    result = client.multipart(
-        "POST",
-        "/judges/upload",
-        data={
+    result = generated_api.judges_upload(
+        client,
+        {
             "organization_id": organization_id,
             "project_id": project_id,
-            "metadata": json.dumps(metadata),
-        },
-        files={
+            "metadata": metadata,
             "bundle": (
                 Path(bundle.entrypoint_arcname).name + ".tar.gz",
                 bundle.bundle,

@@ -8,14 +8,17 @@ from typing import Any
 import click
 
 from judgment_cli import context as context_store
-from judgment_cli.context_entities import (
-    organization_label,
-    project_label,
-)
 from judgment_cli.env import optional_env_var
+from judgment_cli.generated.api import organizations_list, projects_list
+from judgment_cli.generated.types import (
+    OrganizationsListResponseOrganizationsItem as OrganizationRecord,
+)
+from judgment_cli.generated.types import (
+    ProjectsListResponseProjectsItem as ProjectRecord,
+)
 
 
-ORG_ENV_VARS = ("JUDGMENT_ORG_ID", "JUDGMENT_ORGANIZATION_ID")
+ORG_ENV_VAR = "JUDGMENT_ORG_ID"
 PROJECT_ENV_VAR = "JUDGMENT_PROJECT_ID"
 
 
@@ -24,51 +27,6 @@ class ParsedContextualArgs:
     organization_id: str | None
     project_id: str | None
     values: dict[str, str]
-
-
-def fetch_organizations(client: Any) -> list[dict[str, Any]]:
-    response = client.request("GET", "/organizations")
-    if not isinstance(response, dict):
-        raise click.ClickException("Unexpected organizations response.")
-    organizations = response.get("organizations")
-    if not isinstance(organizations, list):
-        raise click.ClickException("Unexpected organizations response.")
-
-    for organization in organizations:
-        if not isinstance(organization, dict):
-            raise click.ClickException("Unexpected organizations response.")
-        organization_id = organization.get("organization_id")
-        detail = organization.get("detail")
-        if (
-            not isinstance(organization_id, str)
-            or not isinstance(detail, dict)
-            or not isinstance(detail.get("name"), str)
-        ):
-            raise click.ClickException("Unexpected organizations response.")
-    return organizations
-
-
-def fetch_projects(client: Any, organization_id: str) -> list[dict[str, Any]]:
-    response = client.request(
-        "GET",
-        "/projects",
-        params={"organization_id": organization_id},
-    )
-    if not isinstance(response, dict):
-        raise click.ClickException("Unexpected projects response.")
-    projects = response.get("projects")
-    if not isinstance(projects, list):
-        raise click.ClickException("Unexpected projects response.")
-
-    for project in projects:
-        if not isinstance(project, dict):
-            raise click.ClickException("Unexpected projects response.")
-        if (
-            not isinstance(project.get("project_id"), str)
-            or not isinstance(project.get("project_name"), str)
-        ):
-            raise click.ClickException("Unexpected projects response.")
-    return projects
 
 
 def parse_contextual_positionals(
@@ -147,16 +105,16 @@ def resolve_context(
         raise click.ClickException("Pass only one of --project-id or --project.")
 
     saved = context_store.load_context()
-    env_org_id = _first_env(ORG_ENV_VARS)
+    env_org_id = optional_env_var(ORG_ENV_VAR)
     env_project_id = optional_env_var(PROJECT_ENV_VAR)
 
-    org: dict[str, Any] | None = None
-    project: dict[str, Any] | None = None
+    org: OrganizationRecord | None = None
+    project: ProjectRecord | None = None
 
     if organization_name:
         organization_matches = [
             organization
-            for organization in fetch_organizations(client)
+            for organization in organizations_list(client)["organizations"]
             if organization["detail"]["name"].casefold()
             == organization_name.casefold()
         ]
@@ -175,7 +133,7 @@ def resolve_context(
 
     if project_name:
         if organization_id:
-            projects = fetch_projects(client, organization_id)
+            projects = projects_list(client, organization_id)["projects"]
             project_matches = [
                 candidate
                 for candidate in projects
@@ -218,7 +176,7 @@ def resolve_context(
         project_id = project["project_id"]
 
     if not organization_id:
-        organizations = fetch_organizations(client)
+        organizations = organizations_list(client)["organizations"]
         if len(organizations) == 1:
             org = organizations[0]
             organization_id = org["organization_id"]
@@ -240,7 +198,7 @@ def resolve_context(
         ):
             project_id = saved_project_id
         else:
-            projects = fetch_projects(client, organization_id)
+            projects = projects_list(client, organization_id)["projects"]
             if len(projects) == 1:
                 project = projects[0]
                 project_id = project["project_id"]
@@ -262,11 +220,11 @@ def _find_project_across_organizations(
     *,
     project_id: str | None = None,
     project_name: str | None = None,
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    matches: list[tuple[dict[str, Any], dict[str, Any]]] = []
-    for organization in fetch_organizations(client):
+) -> tuple[OrganizationRecord, ProjectRecord]:
+    matches: list[tuple[OrganizationRecord, ProjectRecord]] = []
+    for organization in organizations_list(client)["organizations"]:
         oid = organization["organization_id"]
-        for project in fetch_projects(client, oid):
+        for project in projects_list(client, oid)["projects"]:
             if project_id and project["project_id"] == project_id:
                 matches.append((organization, project))
             elif (
@@ -285,10 +243,13 @@ def _find_project_across_organizations(
     raise click.ClickException(f"No project matched {label!r}.")
 
 
-def _organization_help(organizations: list[dict[str, Any]]) -> str:
+def _organization_help(organizations: list[OrganizationRecord]) -> str:
     if not organizations:
         return "No organizations were found for this account."
-    choices = "\n".join(f"  {organization_label(org)}" for org in organizations[:10])
+    choices = "\n".join(
+        f"  {organization['detail']['name']}  {organization['organization_id']}"
+        for organization in organizations[:10]
+    )
     return (
         "No organization selected. Run `judgment context set`, pass "
         "--organization-id, or set JUDGMENT_ORG_ID.\n\nOrganizations:\n"
@@ -296,23 +257,19 @@ def _organization_help(organizations: list[dict[str, Any]]) -> str:
     )
 
 
-def _project_help(projects: list[dict[str, Any]], organization_id: str) -> str:
+def _project_help(projects: list[ProjectRecord], organization_id: str) -> str:
     if not projects:
         return f"No projects were found for organization {organization_id}."
-    choices = "\n".join(f"  {project_label(project)}" for project in projects[:10])
+    choices = []
+    for project in projects[:10]:
+        traces = project["total_traces"]
+        suffix = f"  {int(traces):,} traces" if traces is not None else ""
+        choices.append(f"  {project['project_name']}{suffix}  {project['project_id']}")
+    choices_text = "\n".join(choices)
     return (
         "No project selected. Run `judgment context set`, pass --project-id, "
-        "or set JUDGMENT_PROJECT_ID.\n\nProjects:\n"
-        f"{choices}"
+        "or set JUDGMENT_PROJECT_ID.\n\nProjects:\n" + choices_text
     )
-
-
-def _first_env(names: tuple[str, ...]) -> str | None:
-    for name in names:
-        value = optional_env_var(name)
-        if value:
-            return value
-    return None
 
 
 def _saved_name(

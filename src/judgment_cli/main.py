@@ -8,18 +8,16 @@ from judgment_cli import __version__
 from judgment_cli.client import JudgmentClient
 from judgment_cli import config
 from judgment_cli import context as context_store
-from judgment_cli.context_entities import (
-    organization_label,
-    project_label,
-    trace_count,
-)
-from judgment_cli.context_resolver import (
-    fetch_organizations,
-    fetch_projects,
-    resolve_context,
-)
+from judgment_cli.context_resolver import resolve_context
 from judgment_cli import credentials
-from judgment_cli.generated_commands import register_commands
+from judgment_cli.generated.api import organizations_list, projects_list
+from judgment_cli.generated.commands import register_commands
+from judgment_cli.generated.types import (
+    OrganizationsListResponseOrganizationsItem as OrganizationRecord,
+)
+from judgment_cli.generated.types import (
+    ProjectsListResponseProjectsItem as ProjectRecord,
+)
 from judgment_cli.oauth import browser_login
 from judgment_cli.ui import mask_key, select_item
 
@@ -232,11 +230,11 @@ def context_set(
         _echo_active_context(active, path)
         return
 
-    organizations = fetch_organizations(client)
+    organizations = organizations_list(client)["organizations"]
     selected_org = _select_organization(organizations, organization_id, organization)
     selected_org_id = selected_org["organization_id"]
 
-    projects = fetch_projects(client, selected_org_id)
+    projects = projects_list(client, selected_org_id)["projects"]
     selected_project = _select_project(projects, project_id, project)
 
     active = context_store.ActiveContext(
@@ -272,10 +270,10 @@ def context_clear() -> None:
 
 
 def _select_organization(
-    organizations: list[dict],
+    organizations: list[OrganizationRecord],
     organization_id: str | None,
     organization_name: str | None,
-) -> dict:
+) -> OrganizationRecord:
     if organization_id:
         for organization in organizations:
             if organization["organization_id"] == organization_id:
@@ -296,23 +294,27 @@ def _select_organization(
         raise click.ClickException(f"No organization named {organization_name!r}.")
     if not organizations:
         raise click.ClickException("No organizations were found for this account.")
+
+    def label(organization: OrganizationRecord) -> str:
+        return f"{organization['detail']['name']}  {organization['organization_id']}"
+
     if len(organizations) == 1:
         selected = organizations[0]
-        click.echo(f"Using organization: {organization_label(selected)}")
+        click.echo(f"Using organization: {label(selected)}")
         return selected
 
     return select_item(
         "Organizations",
         organizations,
-        label=organization_label,
+        label=label,
     )
 
 
 def _select_project(
-    projects: list[dict],
+    projects: list[ProjectRecord],
     project_id: str | None,
     project_name: str | None,
-) -> dict:
+) -> ProjectRecord:
     if project_id:
         for project in projects:
             if project["project_id"] == project_id:
@@ -333,23 +335,29 @@ def _select_project(
         raise click.ClickException(f"No project named {project_name!r}.")
     if not projects:
         raise click.ClickException("No projects were found in this organization.")
+
+    def label(project: ProjectRecord) -> str:
+        traces = project["total_traces"]
+        suffix = f"  {int(traces):,} traces" if traces is not None else ""
+        return f"{project['project_name']}{suffix}  {project['project_id']}"
+
     if len(projects) == 1:
         selected = projects[0]
-        click.echo(f"Using project: {project_label(selected)}")
+        click.echo(f"Using project: {label(selected)}")
         return selected
 
     projects = sorted(
         projects,
         key=lambda project: (
-            -int(bool(project.get("is_favorited"))),
-            -(trace_count(project) or 0),
+            -int(project["is_favorited"]),
+            -(project["total_traces"] or 0),
             project["project_name"].casefold(),
         ),
     )
     return select_item(
         "Projects (sorted by trace volume)",
         projects,
-        label=project_label,
+        label=label,
     )
 
 

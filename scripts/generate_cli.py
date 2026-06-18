@@ -2,7 +2,7 @@
 """Auto-generate Click CLI commands from the Judgment OpenAPI spec.
 
 This script consumes ``cli-server``'s OpenAPI document and emits
-``src/judgment_cli/generated_commands.py``. The CLI server is the single
+``src/judgment_cli/generated/``. The CLI server is the single
 source of truth for command names, descriptions, option help, and group
 structure — this generator is a thin renderer.
 
@@ -17,9 +17,10 @@ The generator reads, in order of preference:
 * schema-level ``description`` on each request-body / query property —
   Click ``--option`` help.
 
-Routes whose ``operationId`` is in :data:`MANUAL_COMMANDS` are skipped so
-that hand-written commands (e.g. ``judgment judges upload``) own those
-slots.
+Routes whose ``operationId`` is in :data:`MANUAL_COMMANDS` are skipped by
+the Click command generator so that hand-written commands (e.g. ``judgment
+judges upload``) own those slots. The API client generator still emits
+wrappers and types for those routes.
 
 Run ``python scripts/generate_cli.py --help`` for usage.
 """
@@ -32,11 +33,15 @@ import keyword
 import re
 import sys
 import textwrap
+from pathlib import Path
 from typing import Any
 
 import httpx
 
+from openapi_type_emitter import OpenApiTypeEmitter
+
 DEFAULT_SPEC = "https://cli.judgmentlabs.ai/openapi/json"
+GENERATED_PACKAGE_DIR = Path("src/judgment_cli/generated")
 
 # Operations whose CLI command is hand-written in judgment_cli/judges.py
 # (or another extension module) and must not be auto-generated.
@@ -89,7 +94,11 @@ def derive_group_and_command(
     )
 
 
-def collect_operations(spec: dict) -> list[dict[str, Any]]:
+def collect_operations(
+    spec: dict,
+    *,
+    include_manual: bool = False,
+) -> list[dict[str, Any]]:
     operations: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for path, path_item in spec.get("paths", {}).items():
@@ -101,7 +110,7 @@ def collect_operations(spec: dict) -> list[dict[str, Any]]:
             if not isinstance(operation, dict):
                 continue
             op_id = operation.get("operationId")
-            if op_id in MANUAL_COMMANDS:
+            if op_id in MANUAL_COMMANDS and not include_manual:
                 continue
             group, command = derive_group_and_command(
                 operation, path, method.upper()
@@ -268,6 +277,15 @@ def _quote(text: str) -> str:
     return repr(text)
 
 
+def _pascal_case(name: str) -> str:
+    parts = re.split(r"[^a-zA-Z0-9]+", name)
+    return "".join(part.capitalize() for part in parts if part)
+
+
+def api_func_name(operation_id: str) -> str:
+    return py_var_name(operation_id.replace(".", "_").replace("-", "_"))
+
+
 def _emit_docstring(description: str) -> str:
     """Render a Click command docstring, preserving paragraph breaks."""
     short, _, long = description.partition("\n\n")
@@ -344,6 +362,7 @@ def generate_command_code(
     path_params = extract_path_params(path)
     query_params = extract_query_params(operation)
     body_props = extract_json_body_properties(operation)
+    api_call = api_func_name(operation["operationId"])
 
     is_table = cmd_name in ("list", "search")
     context_names: set[str] = set()
@@ -547,28 +566,11 @@ def generate_command_code(
             var = py_var_name(name)
             lines.append(f'    {var} = _parsed.values["{name}"]')
 
-    if path_params:
-        lines.append(f'    url = f"{path}"')
-    else:
-        lines.append(f'    url = "{path}"')
-
-    if query_params:
-        lines.append("    params = {}")
-        for qp in query_params:
-            var = py_var_name(qp["name"])
-            if qp["required"]:
-                lines.append(f'    params["{qp["name"]}"] = {var}')
-            else:
-                lines.append(f"    if {var} is not None:")
-                lines.append(f'        params["{qp["name"]}"] = {var}')
-
     if method == "GET":
-        call_args = [f'"{method}"', "url"]
-        if query_params:
-            call_args.append("params=params")
-        lines.append(
-            f'    result = ctx.obj["client"].request({", ".join(call_args)})'
-        )
+        call_args = ['ctx.obj["client"]']
+        call_args.extend(path_params)
+        call_args.extend(py_var_name(qp["name"]) for qp in query_params)
+        lines.append(f'    result = _api.{api_call}({", ".join(call_args)})')
         if is_table:
             lines.append("    _table_output(result, output_format=output_format)")
         else:
@@ -594,9 +596,7 @@ def generate_command_code(
                 lines.append(f"    if {var} is not None:")
                 lines.append(f'        body["{prop["name"]}"] = json.loads({var})')
 
-    lines.append(
-        f'    result = ctx.obj["client"].request("{method}", url, json_body=body)'
-    )
+    lines.append(f'    result = _api.{api_call}(ctx.obj["client"], body)')
     if is_table:
         lines.append("    _table_output(result, output_format=output_format)")
     else:
@@ -630,6 +630,7 @@ def generate_all(spec: dict) -> str:
 
         import click
 
+        from judgment_cli.generated import api as _api
         from judgment_cli.context_resolver import parse_contextual_positionals as _parse_contextual_positionals
         from judgment_cli.context_resolver import resolve_context as _resolve_context
         from judgment_cli.ui import table_output as _table_output, yaml_output as _yaml_output
@@ -684,6 +685,168 @@ def generate_all(spec: dict) -> str:
     return out
 
 
+def _response_schema(operation: dict[str, Any]) -> dict[str, Any]:
+    return (
+        ((operation.get("responses") or {}).get("200") or {})
+        .get("content", {})
+        .get("application/json", {})
+        .get("schema", {})
+    )
+
+
+def _request_body(operation: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+    content = (operation.get("requestBody") or {}).get("content", {})
+    for content_type in ("application/json", "multipart/form-data"):
+        schema = (content.get(content_type) or {}).get("schema")
+        if isinstance(schema, dict):
+            return content_type, schema
+    return None
+
+
+def _response_type_name(operation_id: str) -> str:
+    return f"{_pascal_case(operation_id)}Response"
+
+
+def _request_type_name(operation_id: str) -> str:
+    return f"{_pascal_case(operation_id)}Body"
+
+
+def _multipart_request_setup(
+    schema: dict[str, Any],
+    *,
+    required_names: list[str],
+) -> list[str]:
+    lines = [
+        "    data: dict[str, str] = {}",
+        "    files: dict[str, tuple[str, bytes, str]] = {}",
+    ]
+    properties = schema.get("properties") or {}
+    required = set(required_names)
+    for prop_name, prop_schema in properties.items():
+        if not isinstance(prop_schema, dict):
+            continue
+        var_name = py_var_name(prop_name)
+        is_required = prop_name in required
+        if is_required:
+            lines.append(f"    {var_name} = body[{prop_name!r}]")
+            indent = "    "
+        else:
+            lines.append(f"    {var_name} = body.get({prop_name!r})")
+            lines.append(f"    if {var_name} is not None:")
+            indent = "        "
+
+        if prop_schema.get("type") == "string" and prop_schema.get("format") == "binary":
+            lines.append(f"{indent}files[{prop_name!r}] = {var_name}")
+        elif prop_schema.get("type") == "object":
+            lines.append(f"{indent}data[{prop_name!r}] = json.dumps({var_name})")
+        else:
+            lines.append(f"{indent}data[{prop_name!r}] = str({var_name})")
+    return lines
+
+
+def generate_api_client(spec: dict) -> tuple[str, str]:
+    type_emitter = OpenApiTypeEmitter()
+    functions: list[str] = []
+    operations = collect_operations(spec, include_manual=True)
+
+    for entry in operations:
+        operation_id = entry["operation"]["operationId"]
+        response_schema = _response_schema(entry["operation"])
+        if not response_schema:
+            raise SystemExit(
+                f"Operation {operation_id} is missing a 200 JSON response schema."
+            )
+        response_type = type_emitter.type_for(
+            response_schema,
+            _response_type_name(operation_id),
+        )
+        request_body = _request_body(entry["operation"])
+        request_schema = request_body[1] if request_body else None
+        content_type = request_body[0] if request_body else None
+        request_type = (
+            type_emitter.type_for(
+                request_schema,
+                _request_type_name(operation_id),
+            )
+            if request_schema
+            else None
+        )
+        func_name = api_func_name(operation_id)
+        query_params = extract_query_params(entry["operation"])
+        signature = [f"client: JudgmentClient"]
+        signature.extend(f"{name}: str" for name in extract_path_params(entry["path"]))
+        for param in query_params:
+            param_type = type_emitter.type_for(
+                param.get("schema") or {},
+                f"{_pascal_case(operation_id)}{_pascal_case(param['name'])}",
+            )
+            default = "" if param.get("required") else " | None = None"
+            signature.append(f"{py_var_name(param['name'])}: {param_type}{default}")
+        if request_type:
+            signature.append(f"body: {request_type}")
+        functions.append(
+            f"def {func_name}({', '.join(signature)}) -> {response_type}:"
+        )
+        if content_type == "multipart/form-data" and request_schema:
+            functions.extend(
+                _multipart_request_setup(request_schema, required_names=request_schema.get("required") or [])
+            )
+        functions.append("    return cast(")
+        functions.append(f"        {response_type},")
+        request_method = (
+            "client.multipart"
+            if content_type == "multipart/form-data"
+            else "client.request"
+        )
+        functions.append(f"        {request_method}(")
+        functions.append(f"            {entry['method']!r},")
+        path_expr = f'f"{entry["path"]}"' if extract_path_params(entry["path"]) else repr(entry["path"])
+        functions.append(f"            {path_expr},")
+        if query_params and content_type != "multipart/form-data":
+            params = ", ".join(
+                f"{param['name']!r}: {py_var_name(param['name'])}"
+                for param in query_params
+            )
+            functions.append(f"            params={{{params}}},")
+        if content_type == "multipart/form-data":
+            functions.append("            data=data,")
+            functions.append("            files=files,")
+        elif request_type:
+            functions.append("            json_body=body,")
+        functions.append("        ),")
+        functions.append("    )")
+        functions.extend(["", ""])
+
+    types_out = textwrap.dedent("""\
+        # Auto-generated by scripts/generate_cli.py
+        # DO NOT EDIT MANUALLY
+
+        from __future__ import annotations
+
+        from typing import Any, Literal, TypedDict
+
+    """)
+    for lines in type_emitter.definitions.values():
+        types_out += "\n".join(lines) + "\n\n\n"
+
+    api_out = textwrap.dedent("""\
+        # Auto-generated by scripts/generate_cli.py
+        # DO NOT EDIT MANUALLY
+
+        from __future__ import annotations
+
+        import json
+
+        from typing import cast
+
+        from judgment_cli.client import JudgmentClient
+        from judgment_cli.generated.types import *  # noqa: F403
+
+    """)
+    api_out += "\n".join(functions).rstrip() + "\n"
+    return types_out, api_out
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -705,12 +868,25 @@ def main() -> None:
     spec = load_spec(args.spec)
     print(f"Found {len(spec.get('paths', {}))} paths", file=sys.stderr)
 
-    code = generate_all(spec)
+    commands_code = generate_all(spec)
+    types_code, api_code = generate_api_client(spec)
 
-    out_path = "src/judgment_cli/generated_commands.py"
-    with open(out_path, "w") as f:
-        f.write(code)
-    print(f"Wrote {out_path}", file=sys.stderr)
+    GENERATED_PACKAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+    init_path = GENERATED_PACKAGE_DIR / "__init__.py"
+    init_path.write_text(
+        "# Auto-generated package for OpenAPI-derived CLI code.\n",
+    )
+    print(f"Wrote {init_path}", file=sys.stderr)
+
+    files = {
+        GENERATED_PACKAGE_DIR / "commands.py": commands_code,
+        GENERATED_PACKAGE_DIR / "api.py": api_code,
+        GENERATED_PACKAGE_DIR / "types.py": types_code,
+    }
+    for path, code in files.items():
+        path.write_text(code)
+        print(f"Wrote {path}", file=sys.stderr)
 
 
 if __name__ == "__main__":

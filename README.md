@@ -143,4 +143,4 @@ uv sync --extra dev
 uv run python scripts/generate_cli.py
 ```
 
-`generate_cli.py` rewrites `src/judgment_cli/generated_commands.py` from the OpenAPI spec. Pass `--spec <url-or-file>` to point at a different spec; `--help` for the full usage.
+`generate_cli.py` rewrites `src/judgment_cli/generated/` from the OpenAPI spec. Pass `--spec <url-or-file>` to point at a different spec; `--help` for the full usage.
