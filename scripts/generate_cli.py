@@ -2,7 +2,7 @@
 """Auto-generate Click CLI commands from the Judgment OpenAPI spec.
 
 This script consumes ``cli-server``'s OpenAPI document and emits
-``src/judgment_cli/generated_commands.py``. The CLI server is the single
+``src/judgment_cli/generated/``. The CLI server is the single
 source of truth for command names, descriptions, option help, and group
 structure — this generator is a thin renderer.
 
@@ -17,9 +17,10 @@ The generator reads, in order of preference:
 * schema-level ``description`` on each request-body / query property —
   Click ``--option`` help.
 
-Routes whose ``operationId`` is in :data:`MANUAL_COMMANDS` are skipped so
-that hand-written commands (e.g. ``judgment judges upload``) own those
-slots.
+Routes whose ``operationId`` is in :data:`MANUAL_COMMANDS` are skipped by
+the Click command generator so that hand-written commands (e.g. ``judgment
+judges upload``) own those slots. The API client generator still emits
+wrappers and types for those routes.
 
 Run ``python scripts/generate_cli.py --help`` for usage.
 """
@@ -32,15 +33,20 @@ import keyword
 import re
 import sys
 import textwrap
+from pathlib import Path
 from typing import Any
 
 import httpx
 
+from openapi_type_emitter import OpenApiTypeEmitter
+
 DEFAULT_SPEC = "https://cli.judgmentlabs.ai/openapi/json"
+GENERATED_PACKAGE_DIR = Path("src/judgment_cli/generated")
 
 # Operations whose CLI command is hand-written in judgment_cli/judges.py
 # (or another extension module) and must not be auto-generated.
 MANUAL_COMMANDS = {"judges.upload"}
+CONTEXT_FIELDS = {"organization_id", "project_id"}
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +94,11 @@ def derive_group_and_command(
     )
 
 
-def collect_operations(spec: dict) -> list[dict[str, Any]]:
+def collect_operations(
+    spec: dict,
+    *,
+    include_manual: bool = False,
+) -> list[dict[str, Any]]:
     operations: list[dict[str, Any]] = []
     seen: set[tuple[str, str]] = set()
     for path, path_item in spec.get("paths", {}).items():
@@ -100,7 +110,7 @@ def collect_operations(spec: dict) -> list[dict[str, Any]]:
             if not isinstance(operation, dict):
                 continue
             op_id = operation.get("operationId")
-            if op_id in MANUAL_COMMANDS:
+            if op_id in MANUAL_COMMANDS and not include_manual:
                 continue
             group, command = derive_group_and_command(
                 operation, path, method.upper()
@@ -164,6 +174,11 @@ def cli_option_name(name: str) -> str:
     return s.lower().replace("_", "-")
 
 
+def cli_arg_metavar(name: str) -> str:
+    """Render a schema field name as a Click usage placeholder."""
+    return cli_option_name(name).replace("-", "_").upper()
+
+
 def py_var_name(name: str) -> str:
     """Coerce *name* into a valid (non-reserved) Python identifier."""
     s = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name)
@@ -173,12 +188,21 @@ def py_var_name(name: str) -> str:
     return s
 
 
+def _is_context_field(name: str) -> bool:
+    return name in CONTEXT_FIELDS
+
+
 def _schema_type(schema: dict[str, Any]) -> str | None:
     if "type" in schema:
         return schema["type"]
-    for option in schema.get("anyOf", []):
-        if option.get("type") and option["type"] != "null":
-            return option["type"]
+    types = []
+    for option in schema.get("anyOf") or schema.get("allOf") or []:
+        option_type = _schema_type(option) if isinstance(option, dict) else None
+        if option_type and option_type != "null":
+            types.append(option_type)
+    unique_types = list(dict.fromkeys(types))
+    if len(unique_types) == 1:
+        return unique_types[0]
     return None
 
 
@@ -207,7 +231,11 @@ def _is_positional_scalar(schema: dict[str, Any]) -> bool:
     instead, where a name like ``--combine-type all`` reads better than an
     anonymous ``{all|any}`` slot in the signature.
     """
-    return _schema_type(schema) == "string" and not schema.get("enum")
+    return (
+        schema.get("type") == "string"
+        and not schema.get("enum")
+        and "const" not in schema
+    )
 
 
 def click_type_expr(schema: dict[str, Any]) -> str | None:
@@ -222,26 +250,45 @@ def click_type_expr(schema: dict[str, Any]) -> str | None:
 
 
 def click_choice_expr(schema: dict[str, Any]) -> str | None:
-    values = schema.get("enum")
+    values = _schema_choice_values(schema)
     if not values:
         return None
     quoted = ", ".join(repr(v) for v in values)
     return f"click.Choice([{quoted}])"
 
 
+def _schema_choice_values(schema: dict[str, Any]) -> list[Any]:
+    values = schema.get("enum") or ([schema["const"]] if "const" in schema else [])
+    for option in schema.get("anyOf") or schema.get("allOf") or []:
+        if isinstance(option, dict):
+            values.extend(_schema_choice_values(option))
+    return list(dict.fromkeys(values))
+
+
 def _schema_description(schema: dict[str, Any]) -> str | None:
-    """Extract a human description from a schema (or any of its anyOf branches)."""
+    """Extract a human description from a schema or composed schema branch."""
     desc = schema.get("description")
     if desc:
         return desc
-    for option in schema.get("anyOf", []):
-        if isinstance(option, dict) and option.get("description"):
-            return option["description"]
+    for option in schema.get("anyOf") or schema.get("allOf") or []:
+        if isinstance(option, dict):
+            desc = _schema_description(option)
+            if desc:
+                return desc
     return None
 
 
 def _quote(text: str) -> str:
     return repr(text)
+
+
+def _pascal_case(name: str) -> str:
+    parts = re.split(r"[^a-zA-Z0-9]+", name)
+    return "".join(part.capitalize() for part in parts if part)
+
+
+def api_func_name(operation_id: str) -> str:
+    return py_var_name(operation_id.replace(".", "_").replace("-", "_"))
 
 
 def _emit_docstring(description: str) -> str:
@@ -273,6 +320,33 @@ def click_param_args(
         if desc:
             args.append(f"help={_quote(desc)}")
     return f", {', '.join(args)}" if args else ""
+
+
+def contextual_args_metavar(
+    positional_names: list[str],
+    *,
+    needs_organization_id: bool,
+    needs_project_id: bool,
+) -> str:
+    """Render the contextual catch-all argument's usage string.
+
+    Generated commands use one ``nargs=-1`` argument so users can optionally
+    pass leading context IDs before the command's own positional values. The
+    parser accepts:
+
+    * ``[ORG_ID]`` for org-scoped commands
+    * ``[[ORG_ID] PROJECT_ID]`` for project-scoped commands
+    * the OpenAPI-derived command positional fields after those context IDs
+    """
+    parts: list[str] = []
+    if needs_organization_id and needs_project_id:
+        parts.append("[[ORG_ID] PROJECT_ID]")
+    elif needs_project_id:
+        parts.append("[PROJECT_ID]")
+    elif needs_organization_id:
+        parts.append("[ORG_ID]")
+    parts.extend(cli_arg_metavar(name) for name in positional_names)
+    return " ".join(parts)
 
 
 def extract_json_body_properties(operation: dict) -> list[dict[str, Any]]:
@@ -320,18 +394,92 @@ def generate_command_code(
     path_params = extract_path_params(path)
     query_params = extract_query_params(operation)
     body_props = extract_json_body_properties(operation)
+    api_call = api_func_name(operation["operationId"])
 
     is_table = cmd_name in ("list", "search")
+    context_names: set[str] = set()
+    context_names.update(pp for pp in path_params if _is_context_field(pp))
+    context_names.update(
+        qp["name"]
+        for qp in query_params
+        if qp["required"] and _is_context_field(qp["name"])
+    )
+    if method != "GET":
+        context_names.update(
+            prop["name"]
+            for prop in body_props
+            if prop["required"] and _is_context_field(prop["name"])
+        )
+
+    has_context = bool(context_names)
+    needs_organization_id = "organization_id" in context_names
+    needs_project_id = "project_id" in context_names
+    add_organization_options = needs_organization_id or needs_project_id
+
+    def query_is_positional(qp: dict[str, Any]) -> bool:
+        return bool(qp["required"] and _is_positional_scalar(qp["schema"]))
+
+    def body_is_context(prop: dict[str, Any]) -> bool:
+        return bool(prop["required"] and _is_context_field(prop["name"]))
+
+    positional_names: list[str] = []
+    if has_context:
+        positional_names.extend(pp for pp in path_params if not _is_context_field(pp))
+        positional_names.extend(
+            qp["name"]
+            for qp in query_params
+            if query_is_positional(qp) and not _is_context_field(qp["name"])
+        )
+        if method != "GET":
+            positional_names.extend(
+                prop["name"]
+                for prop in body_props
+                if prop["positional"] and not body_is_context(prop)
+            )
 
     lines: list[str] = [f'@{group_name}_group.command("{cmd_name}")']
 
-    for pp in path_params:
-        lines.append(f'@click.argument("{pp}")')
+    if has_context:
+        if add_organization_options:
+            lines.append(
+                '@click.option("--organization-id", "--org-id", '
+                '"organization_id_option", default=None, '
+                'help="Organization ID. Defaults to JUDGMENT_ORG_ID or saved context.")'
+            )
+            lines.append(
+                '@click.option("--organization", "--org", '
+                '"organization_name_option", default=None, '
+                'help="Organization name to resolve.")'
+            )
+        if needs_project_id:
+            lines.append(
+                '@click.option("--project-id", "project_id_option", default=None, '
+                'help="Project ID. Defaults to JUDGMENT_PROJECT_ID or saved context.")'
+            )
+            lines.append(
+                '@click.option("--project", "project_name_option", default=None, '
+                'help="Project name to resolve.")'
+            )
+        metavar = contextual_args_metavar(
+            positional_names,
+            needs_organization_id=needs_organization_id,
+            needs_project_id=needs_project_id,
+        )
+        lines.append(
+            f'@click.argument("_args", nargs=-1, metavar={metavar!r})'
+        )
+    else:
+        for pp in path_params:
+            lines.append(f'@click.argument("{pp}")')
 
     for qp in query_params:
         opt = cli_option_name(qp["name"])
         var = py_var_name(qp["name"])
-        if qp["required"] and _is_positional_scalar(qp["schema"]):
+        if has_context and qp["required"] and _is_context_field(qp["name"]):
+            continue
+        if has_context and query_is_positional(qp):
+            continue
+        if query_is_positional(qp):
             type_arg = click_param_args(qp["schema"])
             lines.append(f'@click.argument("{qp["name"]}"{type_arg})')
         elif qp["required"]:
@@ -349,6 +497,10 @@ def generate_command_code(
         for prop in body_props:
             opt = cli_option_name(prop["name"])
             var = py_var_name(prop["name"])
+            if has_context and body_is_context(prop):
+                continue
+            if has_context and prop["positional"]:
+                continue
             if prop["positional"]:
                 type_arg = click_param_args(prop["schema"])
                 lines.append(f'@click.argument("{prop["name"]}"{type_arg})')
@@ -391,35 +543,73 @@ def generate_command_code(
 
     lines.append("@click.pass_context")
 
-    sig_parts = ["ctx"] + path_params + [py_var_name(q["name"]) for q in query_params]
+    sig_parts = ["ctx"]
+    if has_context:
+        sig_parts.append("_args")
+    else:
+        sig_parts += path_params
+        sig_parts += [py_var_name(q["name"]) for q in query_params]
     sig_parts.append("output_format")
-    if method != "GET":
+    if has_context:
+        if add_organization_options:
+            sig_parts += ["organization_id_option", "organization_name_option"]
+        if needs_project_id:
+            sig_parts += ["project_id_option", "project_name_option"]
+        sig_parts += [
+            py_var_name(q["name"])
+            for q in query_params
+            if not (q["required"] and _is_context_field(q["name"]))
+            and not query_is_positional(q)
+        ]
+        if method != "GET":
+            sig_parts += [
+                py_var_name(prop["name"])
+                for prop in body_props
+                if not body_is_context(prop) and not prop["positional"]
+            ]
+    elif method != "GET":
         sig_parts += [py_var_name(prop["name"]) for prop in body_props]
     lines.append(f"def {func_name}({', '.join(sig_parts)}):")
     lines.append(_emit_docstring(description))
 
-    if path_params:
-        lines.append(f'    url = f"{path}"')
-    else:
-        lines.append(f'    url = "{path}"')
-
-    if query_params:
-        lines.append("    params = {}")
-        for qp in query_params:
-            var = py_var_name(qp["name"])
-            if qp["required"]:
-                lines.append(f'    params["{qp["name"]}"] = {var}')
-            else:
-                lines.append(f"    if {var} is not None:")
-                lines.append(f'        params["{qp["name"]}"] = {var}')
+    if has_context:
+        organization_option = (
+            "organization_id_option" if add_organization_options else "None"
+        )
+        organization_name_option = (
+            "organization_name_option" if add_organization_options else "None"
+        )
+        project_option = "project_id_option" if needs_project_id else "None"
+        project_name_option = "project_name_option" if needs_project_id else "None"
+        lines.append("    _parsed = _parse_contextual_positionals(")
+        lines.append("        _args,")
+        lines.append(f"        positional_names={positional_names!r},")
+        lines.append(f"        needs_organization_id={needs_organization_id!r},")
+        lines.append(f"        needs_project_id={needs_project_id!r},")
+        lines.append(f"        organization_id={organization_option},")
+        lines.append(f"        project_id={project_option},")
+        lines.append("    )")
+        lines.append("    _context = _resolve_context(")
+        lines.append('        ctx.obj["client"],')
+        lines.append("        organization_id=_parsed.organization_id,")
+        lines.append(f"        organization_name={organization_name_option},")
+        lines.append("        project_id=_parsed.project_id,")
+        lines.append(f"        project_name={project_name_option},")
+        lines.append(f"        require_project={needs_project_id!r},")
+        lines.append("    )")
+        if needs_organization_id:
+            lines.append("    organization_id = _context.organization_id")
+        if needs_project_id:
+            lines.append("    project_id = _context.project_id")
+        for name in positional_names:
+            var = py_var_name(name)
+            lines.append(f'    {var} = _parsed.values["{name}"]')
 
     if method == "GET":
-        call_args = [f'"{method}"', "url"]
-        if query_params:
-            call_args.append("params=params")
-        lines.append(
-            f'    result = ctx.obj["client"].request({", ".join(call_args)})'
-        )
+        call_args = ['ctx.obj["client"]']
+        call_args.extend(path_params)
+        call_args.extend(py_var_name(qp["name"]) for qp in query_params)
+        lines.append(f'    result = _api.{api_call}({", ".join(call_args)})')
         if is_table:
             lines.append("    _table_output(result, output_format=output_format)")
         else:
@@ -445,9 +635,7 @@ def generate_command_code(
                 lines.append(f"    if {var} is not None:")
                 lines.append(f'        body["{prop["name"]}"] = json.loads({var})')
 
-    lines.append(
-        f'    result = ctx.obj["client"].request("{method}", url, json_body=body)'
-    )
+    lines.append(f'    result = _api.{api_call}(ctx.obj["client"], body)')
     if is_table:
         lines.append("    _table_output(result, output_format=output_format)")
     else:
@@ -481,6 +669,9 @@ def generate_all(spec: dict) -> str:
 
         import click
 
+        from judgment_cli.generated import api as _api
+        from judgment_cli.context_resolver import parse_contextual_positionals as _parse_contextual_positionals
+        from judgment_cli.context_resolver import resolve_context as _resolve_context
         from judgment_cli.ui import table_output as _table_output, yaml_output as _yaml_output
 
     """)
@@ -533,6 +724,168 @@ def generate_all(spec: dict) -> str:
     return out
 
 
+def _response_schema(operation: dict[str, Any]) -> dict[str, Any]:
+    return (
+        ((operation.get("responses") or {}).get("200") or {})
+        .get("content", {})
+        .get("application/json", {})
+        .get("schema", {})
+    )
+
+
+def _request_body(operation: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+    content = (operation.get("requestBody") or {}).get("content", {})
+    for content_type in ("application/json", "multipart/form-data"):
+        schema = (content.get(content_type) or {}).get("schema")
+        if isinstance(schema, dict):
+            return content_type, schema
+    return None
+
+
+def _response_type_name(operation_id: str) -> str:
+    return f"{_pascal_case(operation_id)}Response"
+
+
+def _request_type_name(operation_id: str) -> str:
+    return f"{_pascal_case(operation_id)}Body"
+
+
+def _multipart_request_setup(
+    schema: dict[str, Any],
+    *,
+    required_names: list[str],
+) -> list[str]:
+    lines = [
+        "    data: dict[str, str] = {}",
+        "    files: dict[str, tuple[str, bytes, str]] = {}",
+    ]
+    properties = schema.get("properties") or {}
+    required = set(required_names)
+    for prop_name, prop_schema in properties.items():
+        if not isinstance(prop_schema, dict):
+            continue
+        var_name = py_var_name(prop_name)
+        is_required = prop_name in required
+        if is_required:
+            lines.append(f"    {var_name} = body[{prop_name!r}]")
+            indent = "    "
+        else:
+            lines.append(f"    {var_name} = body.get({prop_name!r})")
+            lines.append(f"    if {var_name} is not None:")
+            indent = "        "
+
+        if prop_schema.get("type") == "string" and prop_schema.get("format") == "binary":
+            lines.append(f"{indent}files[{prop_name!r}] = {var_name}")
+        elif prop_schema.get("type") == "object":
+            lines.append(f"{indent}data[{prop_name!r}] = json.dumps({var_name})")
+        else:
+            lines.append(f"{indent}data[{prop_name!r}] = str({var_name})")
+    return lines
+
+
+def generate_api_client(spec: dict) -> tuple[str, str]:
+    type_emitter = OpenApiTypeEmitter()
+    functions: list[str] = []
+    operations = collect_operations(spec, include_manual=True)
+
+    for entry in operations:
+        operation_id = entry["operation"]["operationId"]
+        response_schema = _response_schema(entry["operation"])
+        if not response_schema:
+            raise SystemExit(
+                f"Operation {operation_id} is missing a 200 JSON response schema."
+            )
+        response_type = type_emitter.type_for(
+            response_schema,
+            _response_type_name(operation_id),
+        )
+        request_body = _request_body(entry["operation"])
+        request_schema = request_body[1] if request_body else None
+        content_type = request_body[0] if request_body else None
+        request_type = (
+            type_emitter.type_for(
+                request_schema,
+                _request_type_name(operation_id),
+            )
+            if request_schema
+            else None
+        )
+        func_name = api_func_name(operation_id)
+        query_params = extract_query_params(entry["operation"])
+        signature = [f"client: JudgmentClient"]
+        signature.extend(f"{name}: str" for name in extract_path_params(entry["path"]))
+        for param in query_params:
+            param_type = type_emitter.type_for(
+                param.get("schema") or {},
+                f"{_pascal_case(operation_id)}{_pascal_case(param['name'])}",
+            )
+            default = "" if param.get("required") else " | None = None"
+            signature.append(f"{py_var_name(param['name'])}: {param_type}{default}")
+        if request_type:
+            signature.append(f"body: {request_type}")
+        functions.append(
+            f"def {func_name}({', '.join(signature)}) -> {response_type}:"
+        )
+        if content_type == "multipart/form-data" and request_schema:
+            functions.extend(
+                _multipart_request_setup(request_schema, required_names=request_schema.get("required") or [])
+            )
+        functions.append("    return cast(")
+        functions.append(f"        {response_type},")
+        request_method = (
+            "client.multipart"
+            if content_type == "multipart/form-data"
+            else "client.request"
+        )
+        functions.append(f"        {request_method}(")
+        functions.append(f"            {entry['method']!r},")
+        path_expr = f'f"{entry["path"]}"' if extract_path_params(entry["path"]) else repr(entry["path"])
+        functions.append(f"            {path_expr},")
+        if query_params and content_type != "multipart/form-data":
+            params = ", ".join(
+                f"{param['name']!r}: {py_var_name(param['name'])}"
+                for param in query_params
+            )
+            functions.append(f"            params={{{params}}},")
+        if content_type == "multipart/form-data":
+            functions.append("            data=data,")
+            functions.append("            files=files,")
+        elif request_type:
+            functions.append("            json_body=body,")
+        functions.append("        ),")
+        functions.append("    )")
+        functions.extend(["", ""])
+
+    types_out = textwrap.dedent("""\
+        # Auto-generated by scripts/generate_cli.py
+        # DO NOT EDIT MANUALLY
+
+        from __future__ import annotations
+
+        from typing import Any, Literal, TypedDict
+
+    """)
+    for lines in type_emitter.definitions.values():
+        types_out += "\n".join(lines) + "\n\n\n"
+
+    api_out = textwrap.dedent("""\
+        # Auto-generated by scripts/generate_cli.py
+        # DO NOT EDIT MANUALLY
+
+        from __future__ import annotations
+
+        import json
+
+        from typing import cast
+
+        from judgment_cli.client import JudgmentClient
+        from judgment_cli.generated.types import *  # noqa: F403
+
+    """)
+    api_out += "\n".join(functions).rstrip() + "\n"
+    return types_out, api_out
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -554,12 +907,25 @@ def main() -> None:
     spec = load_spec(args.spec)
     print(f"Found {len(spec.get('paths', {}))} paths", file=sys.stderr)
 
-    code = generate_all(spec)
+    commands_code = generate_all(spec)
+    types_code, api_code = generate_api_client(spec)
 
-    out_path = "src/judgment_cli/generated_commands.py"
-    with open(out_path, "w") as f:
-        f.write(code)
-    print(f"Wrote {out_path}", file=sys.stderr)
+    GENERATED_PACKAGE_DIR.mkdir(parents=True, exist_ok=True)
+
+    init_path = GENERATED_PACKAGE_DIR / "__init__.py"
+    init_path.write_text(
+        "# Auto-generated package for OpenAPI-derived CLI code.\n",
+    )
+    print(f"Wrote {init_path}", file=sys.stderr)
+
+    files = {
+        GENERATED_PACKAGE_DIR / "commands.py": commands_code,
+        GENERATED_PACKAGE_DIR / "api.py": api_code,
+        GENERATED_PACKAGE_DIR / "types.py": types_code,
+    }
+    for path, code in files.items():
+        path.write_text(code)
+        print(f"Wrote {path}", file=sys.stderr)
 
 
 if __name__ == "__main__":
