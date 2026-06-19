@@ -187,9 +187,7 @@ def test_generated_command_uses_env_org_and_positional_project(
         config, "credentials_path", lambda: tmp_path / "credentials.json"
     )
     monkeypatch.setenv("JUDGMENT_ORG_ID", "org-env")
-    pagination = json.dumps(
-        {"limit": 25, "cursorSortValue": None, "cursorItemId": None}
-    )
+    pagination = json.dumps({"limit": 25, "cursor": None})
 
     result = CliRunner().invoke(
         cli,
@@ -220,9 +218,7 @@ def test_generated_command_uses_saved_context(monkeypatch, tmp_path: Path) -> No
             project_id="project-saved",
         )
     )
-    pagination = json.dumps(
-        {"limit": 25, "cursorSortValue": None, "cursorItemId": None}
-    )
+    pagination = json.dumps({"limit": 25, "cursor": None})
 
     result = CliRunner().invoke(
         cli,

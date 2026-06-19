@@ -74,11 +74,10 @@ def agent_threads_get(ctx, _args, output_format, organization_id_option, organiz
 @click.option("--owner-user-id", "owner_user_id", default=None, help='Restrict project history to a specific thread owner.')
 @click.option("--all-users", "all_users", default=None, type=bool, help='Deprecated alias for scope=project. Prefer the `scope` query parameter.')
 @click.option("--limit", "limit", default=None, type=float, help='Maximum number of threads to return (1–100).')
-@click.option("--cursor-updated-at", "cursor_updated_at", default=None, help='Pagination cursor: `updated_at` value from a previous `next_cursor`.')
-@click.option("--cursor-thread-id", "cursor_thread_id", default=None, help='Pagination cursor: `thread_id` value from a previous `next_cursor`.')
+@click.option("--cursor", "cursor", default=None, help='Opaque pagination cursor string from a previous `next_cursor`. Omit for the first page.')
 @click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")
 @click.pass_context
-def agent_threads_list(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option, agent_type, agent_name, judge_id, agent_config_id, scope, owner_user_id, all_users, limit, cursor_updated_at, cursor_thread_id):
+def agent_threads_list(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option, agent_type, agent_name, judge_id, agent_config_id, scope, owner_user_id, all_users, limit, cursor):
     "List agent thread conversations.\n\n\x08\nList the authenticated user's agent thread conversations in a project (global_copilot or custom_agent). Returns each thread's title, type, message count, active run status, and timestamps."
     _parsed = _parse_contextual_positionals(
         _args,
@@ -115,10 +114,8 @@ def agent_threads_list(ctx, _args, output_format, organization_id_option, organi
         body["all_users"] = all_users
     if limit is not None:
         body["limit"] = limit
-    if cursor_updated_at is not None:
-        body["cursor_updated_at"] = cursor_updated_at
-    if cursor_thread_id is not None:
-        body["cursor_thread_id"] = cursor_thread_id
+    if cursor is not None:
+        body["cursor"] = cursor
     result = _api.agent_threads_list(ctx.obj["client"], body)
     _table_output(result, output_format=output_format)
 
@@ -1552,7 +1549,7 @@ def sessions_get(ctx, _args, output_format, organization_id_option, organization
 @click.argument("_args", nargs=-1, metavar='[[ORG_ID] PROJECT_ID]')
 @click.option("--filters", "filters", required=True, help='Filter expressions, ANDed together. Each item is `{"field":<field>,"op":<op>,"value":<value>}`. Allowed ops depend on the field\'s type.\n\n**Op groups:**\n- `STRING_OPS` = `=` | `!=` | `contains` | `does_not_contain`\n- `NUMERIC_OPS` = `=` | `!=` | `<` | `<=` | `>` | `>=`\n- `ARRAY_ANY` = `any` (matches when the row\'s array overlaps the supplied values)\n\n**String fields** (op in STRING_OPS, value is a string): `session_id`.\n\n**Numeric fields** (op in NUMERIC_OPS, value is a number): `trace_count`, `latency` (nanoseconds), `total_cost` (USD).\n\n**Array fields** (op = `any`, value is an array): `behaviors` (behavior UUIDs).')
 @click.option("--time-range", "time_range", default=None, help='`{"start_time":<iso8601-string>|null,"end_time":<iso8601-string>|null}`. Either bound may be null to leave that side open. Invalid timestamps return 400.')
-@click.option("--pagination", "pagination", required=True, help='`{"limit":<int 1-200>,"cursorSortValue":<string>|null,"cursorItemId":<string>|null}`.\n\nFirst page: pass null for both cursor fields. Each response returns `nextCursor:{sort_value,session_id}` (or null when `hasMore=false`); copy those into `cursorSortValue` and `cursorItemId` for the next page.')
+@click.option("--pagination", "pagination", required=True, help='`{"limit":<int 1-200>,"cursor":<string>|null}`.\n\nFirst page: pass null or omit cursor. Each response returns `nextCursor` as an opaque string (or null when `hasMore=false`); pass that string as `cursor` for the next page.')
 @click.option("--sort-by", "sort_by", default=None, help='`{"field":<sort_field>,"direction":"asc"|"desc"}` where `sort_field` is one of: `created_at`, `num_traces`, `latency`, `llm_cost`. Default when omitted: `{"field":"created_at","direction":"desc"}`.')
 @click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")
 @click.pass_context
@@ -1840,7 +1837,7 @@ def traces_get(ctx, _args, output_format, organization_id_option, organization_n
 @click.option("--filters", "filters", default=None, help='Filter expressions, ANDed together. Each item is `{"field":<field>,"op":<op>,"value":<value>}`. Allowed ops depend on the field\'s type.\n\n**Op groups:**\n- `STRING_OPS` = `=` | `!=` | `contains` | `does_not_contain` | `exists` | `is_absent`\n- `NUMERIC_OPS` = `=` | `!=` | `<` | `<=` | `>` | `>=`\n- `ARRAY_ANY` = `any` (matches when the row\'s array overlaps the supplied values)\n\n**String fields** (op in STRING_OPS, value is a string): `span_name`, `customer_id`, `customer_user_id`, `session_id`, `error`, `dataset_id`.\n\n**Numeric fields** (op in NUMERIC_OPS, value is a number): `duration` (nanoseconds), `llm_cost` (USD).\n\n**Array fields** (op = `any`, value is an array): `tags` (strings), `rules_invoked` (rule names from this project, strings), `behaviors` (behavior UUIDs).\n\n**Special:**\n- `full_text_search`: op = `contains`, value is a string searched across span attribute text.\n- `span_attributes_roots`: matches a single span attribute key/value: `{"field":"span_attributes_roots","key":"<attribute-name>","op":<STRING_OPS>,"value":"<string>"}`')
 @click.option("--sort-by", "sort_by", default=None, help='`{"field":<sort_field>,"direction":"asc"|"desc"}` where `sort_field` is one of: `created_at`, `span_name`, `duration`, `llm_cost`. Default when omitted: `{"field":"created_at","direction":"desc"}`. Any sort other than `created_at` desc requires `time_range.start_time` and a window between `start_time` and `end_time` of at most 7 days; use `created_at` desc sorting for broader ranges.')
 @click.option("--time-range", "time_range", default=None, help='`{"start_time":<iso8601-string>|null,"end_time":<iso8601-string>|null}`. Either bound may be null to leave that side open. Invalid timestamps return 400. For any sort other than `created_at` desc, `start_time` is required and the window between `start_time` and `end_time` must be at most 7 days.')
-@click.option("--pagination", "pagination", required=True, help='`{"limit":<int 1-200>,"cursorSortValue":<string>|null,"cursorItemId":<string>|null}`.\n\nFirst page: pass null for both cursor fields. Each response returns `nextCursor:{sort_value,trace_id}` (or null when `hasMore=false`); copy those into `cursorSortValue` and `cursorItemId` for the next page.')
+@click.option("--pagination", "pagination", required=True, help='`{"limit":<int 1-200>,"cursor":<string>|null}`.\n\nFirst page: pass null or omit cursor. Each response returns `nextCursor` as an opaque string (or null when `hasMore=false`); pass that string as `cursor` for the next page.')
 @click.option("-o", "--output", "output_format", type=click.Choice(["table", "yaml", "json"]), default="table", help="Output format.")
 @click.pass_context
 def traces_search(ctx, _args, output_format, organization_id_option, organization_name_option, project_id_option, project_name_option, filters, sort_by, time_range, pagination):
