@@ -7,10 +7,19 @@ import click
 from judgment_cli import __version__
 from judgment_cli.client import JudgmentClient
 from judgment_cli import config
+from judgment_cli import context as context_store
+from judgment_cli.context_resolver import resolve_context
 from judgment_cli import credentials
-from judgment_cli.generated_commands import register_commands
+from judgment_cli.generated.api import organizations_list, projects_list
+from judgment_cli.generated.commands import register_commands
+from judgment_cli.generated.types import (
+    OrganizationsListResponseOrganizationsItem as OrganizationRecord,
+)
+from judgment_cli.generated.types import (
+    ProjectsListResponseProjectsItem as ProjectRecord,
+)
 from judgment_cli.oauth import browser_login
-from judgment_cli.ui import mask_key
+from judgment_cli.ui import mask_key, select_item
 
 
 @click.group()
@@ -142,15 +151,19 @@ def logout() -> None:
 def status() -> None:
     """Show current authentication status and credential sources."""
     cfg = config.load()
+    saved_context = context_store.load_context()
 
     click.echo("Credential resolution (highest priority first):\n")
 
     import os
     sources = [
         ("Env", "JUDGMENT_API_KEY", os.environ.get("JUDGMENT_API_KEY", "")),
+        ("Env", "JUDGMENT_ORG_ID", os.environ.get("JUDGMENT_ORG_ID", "")),
+        ("Env", "JUDGMENT_PROJECT_ID", os.environ.get("JUDGMENT_PROJECT_ID", "")),
         ("Env", "JUDGMENT_BASE_URL", os.environ.get("JUDGMENT_BASE_URL", "")),
         ("Env", "JUDGMENT_AUTH_URL", os.environ.get("JUDGMENT_AUTH_URL", "")),
         ("Config", str(config.credentials_path()), ""),
+        ("Context", str(context_store.context_path()), ""),
     ]
     for kind, name, val in sources:
         if kind == "Config":
@@ -161,11 +174,216 @@ def status() -> None:
                     click.echo(f"          {k}: {display}")
             else:
                 click.echo(f"  {kind:6s}  {name}  (not found)")
+        elif kind == "Context":
+            if saved_context:
+                click.echo(f"  {kind:6s}  {name}")
+                for k, v in saved_context.items():
+                    click.echo(f"          {k}: {v}")
+            else:
+                click.echo(f"  {kind:6s}  {name}  (not found)")
         elif val:
             display = mask_key(val) if "KEY" in name else val
             click.echo(f"  {kind:6s}  {name} = {display}")
         else:
             click.echo(f"  {kind:6s}  {name}  (not set)")
+
+
+@cli.group("context")
+def context_group() -> None:
+    """Manage the default organization and project for commands."""
+
+
+@context_group.command("set")
+@click.option(
+    "--organization-id",
+    "--org-id",
+    default=None,
+    help="Organization ID to use.",
+)
+@click.option(
+    "--organization",
+    "--org",
+    default=None,
+    help="Organization name to use.",
+)
+@click.option("--project-id", default=None, help="Project ID to use.")
+@click.option("--project", default=None, help="Project name to use.")
+@click.pass_context
+def context_set(
+    ctx: click.Context,
+    organization_id: str | None,
+    organization: str | None,
+    project_id: str | None,
+    project: str | None,
+) -> None:
+    """Select and save the default organization and project."""
+    client = ctx.obj["client"]
+
+    if (project_id or project) and not (organization_id or organization):
+        active = resolve_context(
+            client,
+            project_id=project_id,
+            project_name=project,
+            require_project=True,
+        )
+        path = context_store.save_context(active)
+        _echo_active_context(active, path)
+        return
+
+    organizations = organizations_list(client)["organizations"]
+    selected_org = _select_organization(organizations, organization_id, organization)
+    selected_org_id = selected_org["organization_id"]
+
+    projects = projects_list(client, selected_org_id)["projects"]
+    selected_project = _select_project(projects, project_id, project)
+
+    active = context_store.ActiveContext(
+        organization_id=selected_org_id,
+        organization_name=selected_org["detail"]["name"],
+        project_id=selected_project["project_id"],
+        project_name=selected_project["project_name"],
+    )
+    path = context_store.save_context(active)
+    _echo_active_context(active, path)
+
+
+@context_group.command("show")
+def context_show() -> None:
+    """Show the saved default organization and project."""
+    saved = context_store.load_context()
+    if not saved:
+        click.echo("No context saved. Run `judgment context set`.")
+        return
+
+    click.echo("Active context:")
+    click.echo(f"  Organization: {_display_context_value(saved, 'organization')}")
+    click.echo(f"  Project:      {_display_context_value(saved, 'project')}")
+
+
+@context_group.command("clear")
+def context_clear() -> None:
+    """Clear the saved default organization and project."""
+    if context_store.clear_context():
+        click.echo("Context cleared.")
+    else:
+        click.echo("No context saved.")
+
+
+def _select_organization(
+    organizations: list[OrganizationRecord],
+    organization_id: str | None,
+    organization_name: str | None,
+) -> OrganizationRecord:
+    if organization_id:
+        for organization in organizations:
+            if organization["organization_id"] == organization_id:
+                return organization
+        raise click.ClickException(f"No organization matched ID {organization_id!r}.")
+    if organization_name:
+        matches = [
+            organization
+            for organization in organizations
+            if organization["detail"]["name"].casefold() == organization_name.casefold()
+        ]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise click.ClickException(
+                f"Multiple organizations named {organization_name!r}; pass the ID instead."
+            )
+        raise click.ClickException(f"No organization named {organization_name!r}.")
+    if not organizations:
+        raise click.ClickException("No organizations were found for this account.")
+
+    def label(organization: OrganizationRecord) -> str:
+        return f"{organization['detail']['name']}  {organization['organization_id']}"
+
+    if len(organizations) == 1:
+        selected = organizations[0]
+        click.echo(f"Using organization: {label(selected)}")
+        return selected
+
+    return select_item(
+        "Organizations",
+        organizations,
+        label=label,
+    )
+
+
+def _select_project(
+    projects: list[ProjectRecord],
+    project_id: str | None,
+    project_name: str | None,
+) -> ProjectRecord:
+    if project_id:
+        for project in projects:
+            if project["project_id"] == project_id:
+                return project
+        raise click.ClickException(f"No project matched ID {project_id!r}.")
+    if project_name:
+        matches = [
+            project
+            for project in projects
+            if project["project_name"].casefold() == project_name.casefold()
+        ]
+        if len(matches) == 1:
+            return matches[0]
+        if len(matches) > 1:
+            raise click.ClickException(
+                f"Multiple projects named {project_name!r}; pass the ID instead."
+            )
+        raise click.ClickException(f"No project named {project_name!r}.")
+    if not projects:
+        raise click.ClickException("No projects were found in this organization.")
+
+    def label(project: ProjectRecord) -> str:
+        traces = project["total_traces"]
+        suffix = f"  {int(traces):,} traces" if traces is not None else ""
+        return f"{project['project_name']}{suffix}  {project['project_id']}"
+
+    if len(projects) == 1:
+        selected = projects[0]
+        click.echo(f"Using project: {label(selected)}")
+        return selected
+
+    projects = sorted(
+        projects,
+        key=lambda project: (
+            -int(project["is_favorited"]),
+            -(project["total_traces"] or 0),
+            project["project_name"].casefold(),
+        ),
+    )
+    return select_item(
+        "Projects (sorted by trace volume)",
+        projects,
+        label=label,
+    )
+
+
+def _echo_active_context(active: context_store.ActiveContext, path) -> None:
+    click.echo("Active context saved:")
+    click.echo(
+        f"  Organization: {_label_with_id(active.organization_name, active.organization_id)}"
+    )
+    if active.project_id:
+        click.echo(
+            f"  Project:      {_label_with_id(active.project_name, active.project_id)}"
+        )
+    click.echo(f"Saved to {path}")
+
+
+def _display_context_value(saved: dict, prefix: str) -> str:
+    name = saved.get(f"{prefix}_name")
+    value_id = saved.get(f"{prefix}_id")
+    return _label_with_id(
+        name if isinstance(name, str) else None,
+        str(value_id or ""),
+    )
+
+
+def _label_with_id(name: str | None, value_id: str) -> str:
+    return f"{name} ({value_id})" if name else value_id
 
 
 register_commands(cli)

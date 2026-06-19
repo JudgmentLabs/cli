@@ -24,7 +24,7 @@ Tests are skipped when ``JUDGMENT_API_KEY`` or ``JUDGMENT_ORG_ID`` are
 unset. Lifecycle tests (create → update → delete) clean up after
 themselves via ``try/finally``.
 
-Coverage: every command in ``judgment_cli.generated_commands``. Each
+Coverage: every command in ``judgment_cli.generated.commands``. Each
 test docstring lists the commands it exercises.
 """
 

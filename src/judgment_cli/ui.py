@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import sys
-from typing import NoReturn
+from typing import Callable, NoReturn, Sequence, TypeVar
 
 import click
+
+T = TypeVar("T")
 
 
 def output(data: object) -> None:
@@ -127,6 +129,174 @@ def error(message: str, *, exit_code: int = 1) -> NoReturn:
 
 def confirm(prompt: str, *, default: bool = False) -> bool:
     return click.confirm(prompt, default=default)
+
+
+def select_item(
+    title: str,
+    items: Sequence[T],
+    *,
+    label: Callable[[T], str],
+    page_size: int = 12,
+) -> T:
+    """Select one item with a searchable TTY UI or numeric fallback."""
+    if not items:
+        raise click.ClickException(f"No {title.lower()} available.")
+    if _can_use_interactive_selector():
+        return _select_item_interactive(
+            title,
+            items,
+            label=label,
+            page_size=page_size,
+        )
+    return _select_item_by_number(title, items, label=label)
+
+
+def _can_use_interactive_selector() -> bool:
+    return bool(sys.stdin.isatty() and sys.stdout.isatty())
+
+
+def _select_item_by_number(
+    title: str,
+    items: Sequence[T],
+    *,
+    label: Callable[[T], str],
+) -> T:
+    click.echo(title)
+    for idx, item in enumerate(items, start=1):
+        click.echo(f"{idx}. {label(item)}")
+    choice = click.prompt("Choose", type=click.IntRange(1, len(items)))
+    return items[choice - 1]
+
+
+def _select_item_interactive(
+    title: str,
+    items: Sequence[T],
+    *,
+    label: Callable[[T], str],
+    page_size: int,
+) -> T:
+    query = ""
+    selected = 0
+
+    while True:
+        matches = _filter_item_indexes(items, query, label=label)
+        if selected >= len(matches):
+            selected = max(0, len(matches) - 1)
+
+        _render_selector(
+            title,
+            items,
+            matches,
+            selected=selected,
+            query=query,
+            label=label,
+            page_size=page_size,
+        )
+
+        char = _read_selector_key()
+        if char in ("\x03", "\x04"):
+            raise click.Abort()
+        if char in ("\r", "\n"):
+            if matches:
+                click.clear()
+                return items[matches[selected]]
+            continue
+        if char in ("\x7f", "\b"):
+            query = query[:-1]
+            selected = 0
+            continue
+        if char in ("\x1b[A", "\x1bOA"):
+            selected = max(0, selected - 1)
+            continue
+        if char in ("\x1b[B", "\x1bOB"):
+            selected = min(len(matches) - 1, selected + 1) if matches else 0
+            continue
+        if char.startswith("\x1b"):
+            query = ""
+            selected = 0
+            continue
+        if char.isprintable():
+            query += char
+            selected = 0
+
+
+def _render_selector(
+    title: str,
+    items: Sequence[T],
+    matches: list[int],
+    *,
+    selected: int,
+    query: str,
+    label: Callable[[T], str],
+    page_size: int,
+) -> None:
+    click.clear()
+    click.echo(title)
+    click.echo(f"Search: {query}")
+    click.echo("Use arrows, type to filter, Enter to select, Esc to clear.")
+
+    if not matches:
+        click.echo("\n(no matches)")
+        return
+
+    start, end = _selector_window(selected, len(matches), page_size)
+    click.echo(f"\nShowing {start + 1}-{end} of {len(matches)}")
+    for visible_pos, match_idx in enumerate(matches[start:end], start=start):
+        marker = ">" if visible_pos == selected else " "
+        rendered = f"{marker} {label(items[match_idx])}"
+        if visible_pos == selected:
+            rendered = click.style(rendered, bold=True, fg="cyan")
+        click.echo(rendered)
+
+
+def _read_selector_key() -> str:
+    char = click.getchar(echo=False)
+    if char != "\x1b":
+        return char
+
+    # Arrow keys may arrive as separate ESC+[+letter characters on POSIX.
+    # Wait very briefly for the rest so a plain Esc still works as "clear".
+    try:
+        import select
+
+        parts = [char]
+        while len(parts) < 3 and select.select([sys.stdin], [], [], 0.01)[0]:
+            parts.append(click.getchar(echo=False))
+        return "".join(parts)
+    except Exception:
+        return char
+
+
+def _filter_item_indexes(
+    items: Sequence[T],
+    query: str,
+    *,
+    label: Callable[[T], str],
+) -> list[int]:
+    terms = [term for term in _normalize_query(query).split(" ") if term]
+    if not terms:
+        return list(range(len(items)))
+    matches: list[int] = []
+    for idx, item in enumerate(items):
+        normalized = _normalize_query(label(item))
+        if all(term in normalized for term in terms):
+            matches.append(idx)
+    return matches
+
+
+def _selector_window(selected: int, total: int, page_size: int) -> tuple[int, int]:
+    page_size = max(1, page_size)
+    if total <= page_size:
+        return 0, total
+    half = page_size // 2
+    start = max(0, selected - half)
+    end = min(total, start + page_size)
+    start = max(0, end - page_size)
+    return start, end
+
+
+def _normalize_query(value: str) -> str:
+    return " ".join(value.casefold().split())
 
 
 def mask_key(key: str) -> str:
