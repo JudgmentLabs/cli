@@ -359,14 +359,9 @@ class AgentThreadsListResponseThreadsItem(AgentThreadsListResponseThreadsItemOpt
     updated_at: str
 
 
-class AgentThreadsListResponseNextCursorOption1(TypedDict):
-    updated_at: str
-    thread_id: str
-
-
 class AgentThreadsListResponse(TypedDict):
     threads: list[AgentThreadsListResponseThreadsItem]
-    next_cursor: AgentThreadsListResponseNextCursorOption1 | None
+    next_cursor: str | None
 
 
 class AgentThreadsListBodyOptional(TypedDict, total=False):
@@ -376,8 +371,7 @@ class AgentThreadsListBodyOptional(TypedDict, total=False):
     owner_user_id: str
     all_users: bool
     limit: float
-    cursor_updated_at: str
-    cursor_thread_id: str
+    cursor: str
 
 
 class AgentThreadsListBody(AgentThreadsListBodyOptional):
@@ -1905,8 +1899,7 @@ class SessionsSearchBodyTimeRange(TypedDict):
 
 class SessionsSearchBodyPagination(TypedDict):
     limit: float
-    cursorSortValue: str | None
-    cursorItemId: str | None
+    cursor: str | None
 
 
 class SessionsSearchBodySortBy(TypedDict):
@@ -2150,8 +2143,7 @@ class TracesSearchBodyTimeRangeOption1(TypedDict):
 
 class TracesSearchBodyPagination(TypedDict):
     limit: float
-    cursorSortValue: str | None
-    cursorItemId: str | None
+    cursor: str | None
 
 
 class TracesSearchBodyOptional(TypedDict, total=False):
@@ -2271,5 +2263,4 @@ class TracesTagsBody(TypedDict):
     organization_id: str
     project_id: str
     trace_id: str
-
 

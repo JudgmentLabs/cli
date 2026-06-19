@@ -103,8 +103,8 @@ positional IDs for scripts.
 judgment projects list
 
 # Traces
-judgment traces search --pagination '{"limit":25,"cursorSortValue":null,"cursorItemId":null}'
-judgment traces search    <PROJECT_ID> --pagination '{"limit":25,"cursorSortValue":null,"cursorItemId":null}'
+judgment traces search --pagination '{"limit":25,"cursor":null}'
+judgment traces search    <PROJECT_ID> --pagination '{"limit":25,"cursor":null}'
 judgment traces get       <PROJECT_ID> <TRACE_ID>
 judgment traces spans     <PROJECT_ID> <TRACE_ID>
 judgment traces tags      <PROJECT_ID> <TRACE_ID>
@@ -112,7 +112,7 @@ judgment traces behaviors <PROJECT_ID> <TRACE_ID>
 judgment traces span      <PROJECT_ID> --spans '[{"trace_id":"...","span_id":"..."}]'
 
 # Sessions
-judgment sessions search          <PROJECT_ID> --pagination '{"limit":25,"cursorSortValue":null,"cursorItemId":null}'
+judgment sessions search          <PROJECT_ID> --pagination '{"limit":25,"cursor":null}'
 judgment sessions get             <PROJECT_ID> <SESSION_ID>
 judgment sessions trace-ids       <PROJECT_ID> <SESSION_ID>
 judgment sessions trace-behaviors <PROJECT_ID> <SESSION_ID>

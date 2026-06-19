@@ -110,9 +110,7 @@ def project_id() -> str:
     if not candidates:
         pytest.skip("No projects in this organization have any traces.")
 
-    pagination = json.dumps(
-        {"limit": 1, "cursorSortValue": None, "cursorItemId": None}
-    )
+    pagination = json.dumps({"limit": 1, "cursor": None})
     for project in candidates:
         pid = project.get("project_id") or project.get("id")
         assert pid
@@ -142,9 +140,7 @@ def project_id() -> str:
 
 @pytest.fixture(scope="session")
 def trace_id(project_id: str) -> str:
-    pagination = json.dumps(
-        {"limit": 1, "cursorSortValue": None, "cursorItemId": None}
-    )
+    pagination = json.dumps({"limit": 1, "cursor": None})
     payload = _run("traces", "search", project_id, "--pagination", pagination, "-o", "json")
     assert isinstance(payload, dict)
     traces = payload.get("data") or []
@@ -171,9 +167,7 @@ def span_pair(project_id: str, trace_id: str) -> tuple[str, str]:
 
 @pytest.fixture(scope="session")
 def session_id(project_id: str) -> str:
-    pagination = json.dumps(
-        {"limit": 1, "cursorSortValue": None, "cursorItemId": None}
-    )
+    pagination = json.dumps({"limit": 1, "cursor": None})
     payload = _run(
         "sessions",
         "search",
@@ -616,9 +610,7 @@ def test_projects_create_and_favorite():
 
 def test_sessions_search(project_id: str):
     """Covers ``sessions search``."""
-    pagination = json.dumps(
-        {"limit": 5, "cursorSortValue": None, "cursorItemId": None}
-    )
+    pagination = json.dumps({"limit": 5, "cursor": None})
     payload = _run(
         "sessions",
         "search",
@@ -658,9 +650,7 @@ def test_sessions_trace_behaviors(project_id: str, session_id: str):
 
 def test_traces_search(project_id: str):
     """Covers ``traces search``."""
-    pagination = json.dumps(
-        {"limit": 5, "cursorSortValue": None, "cursorItemId": None}
-    )
+    pagination = json.dumps({"limit": 5, "cursor": None})
     payload = _run(
         "traces", "search", project_id, "--pagination", pagination, "-o", "json"
     )
