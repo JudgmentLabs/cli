@@ -1,5 +1,16 @@
 # Judgment CLI
 
+> [!WARNING]
+> **Deprecated as of July 9, 2026.** The Judgment CLI is no longer under active
+> development and is not recommended for new workflows. Existing releases
+> remain available, but compatibility with future API changes is not
+> guaranteed. Use the [Judgment MCP
+> server](https://docs.judgmentlabs.ai/documentation/mcp-server) for agent
+> workflows or the [Python and TypeScript
+> SDKs](https://docs.judgmentlabs.ai/sdk-reference) for programmatic
+> integrations. Existing installations are not being shut down as part of this
+> change. We may revisit a CLI in the future.
+
 Command-line interface for the [Judgment API](https://docs.judgmentlabs.ai). Commands are auto-generated from the API's OpenAPI spec, so the CLI surface always matches the server.
 
 ## Installation
